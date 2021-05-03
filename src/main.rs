@@ -35,12 +35,12 @@ impl Timer {
         self.current == self.period
     }
 
-    pub fn is_in_progress(&self) -> bool {
+    pub fn is_not_triggered_yet(&self) -> bool {
         self.current < self.period
     }
 
-    pub fn is_working(&self) -> bool {
-        self.is_in_progress() || self.is_triggered()
+    pub fn is_started(&self) -> bool {
+        self.is_not_triggered_yet() || self.is_triggered()
     }
 
     pub fn start(&mut self) {
@@ -52,23 +52,23 @@ impl Timer {
     }
 }
 
-struct FlashingAnimation {
+struct BlinkAnimation {
     timer: Timer,
-    changes_remains: Number,
+    changes_remain: Number,
     show: bool,
 }
 
-impl FlashingAnimation {
-    pub fn new() -> FlashingAnimation {
-        FlashingAnimation {
+impl BlinkAnimation {
+    pub fn new() -> BlinkAnimation {
+        BlinkAnimation {
             timer: Timer::new(15),
-            changes_remains: 0,
+            changes_remain: 0,
             show: true,
         }
     }
 
     pub fn start(&mut self) {
-        self.changes_remains = 6;
+        self.changes_remain = 6;
         self.show = false;
         self.timer.start();
     }
@@ -78,9 +78,9 @@ impl FlashingAnimation {
 
         if self.timer.is_triggered() {
             self.show = !self.show;
-            self.changes_remains -= 1;
+            self.changes_remain -= 1;
 
-            if self.changes_remains > 0 {
+            if self.changes_remain > 0 {
                 self.timer.start();
             } else {
                 self.show = true;
@@ -93,13 +93,13 @@ impl FlashingAnimation {
     }
 
     pub fn is_triggered(&self) -> bool {
-        self.changes_remains == 0 && self.timer.is_triggered()
+        self.changes_remain == 0 && self.timer.is_triggered()
     }
-    pub fn is_in_progress(&self) -> bool {
-        self.changes_remains != 0 || self.timer.is_in_progress()
+    pub fn is_not_triggered_yet(&self) -> bool {
+        self.changes_remain != 0 || self.timer.is_not_triggered_yet()
     }
-    pub fn is_working(&self) -> bool {
-        self.is_in_progress() || self.is_triggered()
+    pub fn is_started(&self) -> bool {
+        self.is_not_triggered_yet() || self.is_triggered()
     }
 }
 
@@ -242,7 +242,7 @@ struct State<'frame> {
     field_pos: Point,
     pub tet_pos: Point,
     fall_timer: Timer,
-    flashing_animation: FlashingAnimation,
+    flashing_animation: BlinkAnimation,
     rng: Rng,
 }
 
@@ -287,7 +287,7 @@ impl<'frame> State<'frame> {
             field_pos,
             tet_pos: Self::spawn_pos(field_pos),
             fall_timer,
-            flashing_animation: FlashingAnimation::new(),
+            flashing_animation: BlinkAnimation::new(),
             rng,
         }
     }
@@ -342,7 +342,7 @@ impl<'frame> State<'frame> {
             }
         }
 
-        if !self.flashing_animation.is_working() {
+        if !self.flashing_animation.is_started() {
             for y in 0..Frame::height() {
                 for x in 0..Frame::width() {
                     let pos = self.tet_pos + Point::new(x, y);
@@ -368,7 +368,7 @@ impl<'frame> State<'frame> {
     }
 
     pub fn move_colliding_tetromino(&mut self, new_pos: Point) {
-        if self.flashing_animation.is_working() {
+        if self.flashing_animation.is_started() {
             return;
         }
         if self.is_collide(self.current_frame(), self.translate_tet_to_field_pos(self.tet_pos)) ||
