@@ -344,6 +344,10 @@ impl Field {
 
         return false;
     }
+
+    pub fn clear(&mut self) {
+        self.squares.fill(false);
+    }
 }
 
 pub struct State<'frame> {
@@ -357,8 +361,9 @@ pub struct State<'frame> {
     field: Field,
     tet_pos: Point,
     fall_timer: Timer,
-    flashing_animation: BlinkAnimation,
+    filled_lines_animation: BlinkAnimation,
     rng: Rng,
+    screen: Screen,
 
     // visualisation
     field_pos: Point,
@@ -382,29 +387,27 @@ impl<'frame> State<'frame> {
 
         let field_pos = Point::new(3, 3);
 
-        let mut fall_timer = Timer::new(120);
-        fall_timer.start();
+        let fall_timer = Timer::new(120);
 
-        let mut field_line_timer = Timer::new(15);
-        field_line_timer.start();
-
-        //let rng = Rng::with_seed(42);
         let rng = Rng::new();
-        let curr_tet_index = rng.usize(0..7);
-        let next_tet_index = rng.usize(0..7);
 
-        State {
+        let mut state = State {
             tetrominos,
             curr_frame: 0,
-            curr_tet_index,
-            next_tet_index,
+            curr_tet_index: 0,
+            next_tet_index: 0,
             field: Field::new(),
             field_pos,
-            tet_pos: Self::spawn_pos(),
+            tet_pos: Point::new(0, 0),
             fall_timer,
-            flashing_animation: BlinkAnimation::new(),
+            filled_lines_animation: BlinkAnimation::new(),
             rng,
-        }
+            screen: Screen::Game,
+        };
+
+        state.enter_screen();
+
+        state
     }
 
     fn next_tetromino(&mut self) {
@@ -435,48 +438,8 @@ impl<'frame> State<'frame> {
         self.field.clean_filled_lines();
     }
 
-    pub fn draw(&self, buf: &mut ScreenBuffer) {
-        crate::video::draw_rect(buf, self.field_pos, Field::width() + 2, Field::height() + 2, b"+");
-
-        for y in 0..Field::height() {
-            let pos_y = self.field_pos.y + y + 1;
-            if !self.field.is_line_filled(y) || self.flashing_animation.is_show() {
-                for x in 0..Field::width() {
-                    let pos_x = self.field_pos.x + x + 1;
-                    if self.field.is_filled(Point::new(x, y)) {
-                        buf.draw_chars(Point::new(pos_x, pos_y), &[0xb1u8]);
-                    }
-                }
-            }
-        }
-
-        if !self.flashing_animation.is_started() {
-            for y in 0..Frame::height() {
-                for x in 0..Frame::width() {
-                    let pos = self.tet_pos + self.field_pos + Point::new(1, 1) + Point::new(x, y);
-                    if self.current_frame().is_filled(Point::new(x, y)) {
-                        buf.draw_chars(pos, &[0xb1u8]);
-                    }
-                }
-            }
-        }
-
-        for y in 0..Frame::height() {
-            for x in 0..Frame::width() {
-                let pos = self.field_pos.add_x(Field::width() + 4).add_y(Field::height() / 2) + Point::new(x, y);
-                if self.tetrominos[self.next_tet_index].frames[0].is_filled(Point::new(x, y)) {
-                    buf.draw_chars(pos, &[0xb1u8]);
-                }
-            }
-        }
-
-        if self.field.is_collide(self.current_frame(), self.tet_pos) {
-            buf.draw_chars(self.field_pos.add_x(Field::width() + 2 + 3), b"c");
-        }
-    }
-
     fn move_colliding_tetromino(&mut self, new_pos: Point) {
-        if self.flashing_animation.is_started() {
+        if self.filled_lines_animation.is_started() {
             return;
         }
         if self.is_collide(self.current_frame(), self.tet_pos) ||
@@ -503,6 +466,10 @@ impl<'frame> State<'frame> {
         self.next_tet_index = self.rng.usize(0..7);
         self.curr_frame = 0;
         self.tet_pos = Self::spawn_pos();
+
+        if self.is_collide(self.current_frame(), self.tet_pos) {
+            self.change_screen(Screen::Retry);
+        }
     }
 
     fn move_down(&mut self) {
@@ -518,7 +485,7 @@ impl<'frame> State<'frame> {
             self.copy_frame();
 
             if self.field.is_any_line_filled() {
-                self.flashing_animation.start();
+                self.filled_lines_animation.start();
                 self.fall_timer.stop();
             } else {
                 self.finish_turn();
@@ -526,50 +493,184 @@ impl<'frame> State<'frame> {
         }
     }
 
+    fn enter_screen(&mut self) {
+        match self.screen {
+            Screen::Game => GameScreen::enter(self),
+            Screen::Retry => RetryScreen::enter(self),
+        }
+    }
+
+    pub fn change_screen(&mut self, new_screen: Screen) {
+        if self.screen == new_screen {
+            return;
+        }
+
+        match self.screen {
+            Screen::Game => GameScreen::leave(self),
+            Screen::Retry => RetryScreen::leave(self),
+        }
+
+        self.screen = new_screen;
+
+        self.enter_screen();
+    }
+
     pub fn handle_input(&mut self, input: &Input) {
-        if input.is_front_edge(Scancode::Equals) {
-            self.next_tetromino();
-        } else if input.is_front_edge(Scancode::Minus) {
-            self.prev_tetromino();
-        } else if input.is_front_edge(Scancode::Space) {
-            self.rotate_colliding_tetromino();
-        } else if input.is_front_edge(Scancode::Up) {
-            let new_pos = self.tet_pos.sub_y(1);
-            self.move_colliding_tetromino(new_pos);
-        } else if input.is_front_edge(Scancode::Down) {
-            let new_pos = self.tet_pos.add_y(1);
-            self.move_colliding_tetromino(new_pos);
-        } else if input.is_front_edge(Scancode::Left) {
-            let new_pos = self.tet_pos.sub_x(1);
-            self.move_colliding_tetromino(new_pos);
-        } else if input.is_front_edge(Scancode::Right) {
-            let new_pos = self.tet_pos.add_x(1);
-            self.move_colliding_tetromino(new_pos);
-        } else if input.is_front_edge(Scancode::V) {
-            self.copy_frame();
-            for y in 0..Field::height() {
-                if self.field.is_line_filled(y) {
-                    self.flashing_animation.start();
-                    break;
-                }
-            }
-        } else if input.is_front_edge(Scancode::R) {
-            self.clean_filled_lines();
+        match self.screen {
+            Screen::Game => GameScreen::handle_input(self, input),
+            Screen::Retry => RetryScreen::handle_input(self, input),
         }
     }
 
     pub fn tick(&mut self) {
-        self.fall_timer.tick();
-        self.flashing_animation.tick();
+        match self.screen {
+            Screen::Game => GameScreen::tick(self),
+            Screen::Retry => RetryScreen::tick(self),
+        }
+    }
 
-        if self.flashing_animation.is_triggered() {
-            self.clean_filled_lines();
-            self.fall_timer.start();
-            self.finish_turn();
+    pub fn draw(&self, buf: &mut ScreenBuffer) {
+        match self.screen {
+            Screen::Game => GameScreen::draw(self, buf),
+            Screen::Retry => RetryScreen::draw(self, buf),
         }
-        if self.fall_timer.is_triggered() {
-            self.fall_timer.start();
-            self.move_down();
+    }
+}
+
+#[derive(Eq, PartialEq, Copy, Clone)]
+pub enum Screen {
+    Game,
+    Retry,
+}
+
+struct GameScreen;
+
+impl GameScreen {
+    pub fn enter(state: &mut State) {
+        state.fall_timer.start();
+        state.curr_tet_index = state.rng.usize(0..7);
+        state.next_tet_index = state.rng.usize(0..7);
+        state.curr_frame = 0;
+        state.field.clear();
+        state.tet_pos = State::spawn_pos();
+    }
+
+    pub fn leave(state: &mut State) {
+        state.fall_timer.stop();
+        state.filled_lines_animation.stop();
+    }
+
+    pub fn handle_input(state: &mut State, input: &Input) {
+        if input.is_front_edge(Scancode::Equals) {
+            state.next_tetromino();
+        } else if input.is_front_edge(Scancode::Minus) {
+            state.prev_tetromino();
+        } else if input.is_front_edge(Scancode::Space) {
+            state.rotate_colliding_tetromino();
+        } else if input.is_front_edge(Scancode::Up) {
+            let new_pos = state.tet_pos.sub_y(1);
+            state.move_colliding_tetromino(new_pos);
+        } else if input.is_front_edge(Scancode::Down) {
+            let new_pos = state.tet_pos.add_y(1);
+            state.move_colliding_tetromino(new_pos);
+        } else if input.is_front_edge(Scancode::Left) {
+            let new_pos = state.tet_pos.sub_x(1);
+            state.move_colliding_tetromino(new_pos);
+        } else if input.is_front_edge(Scancode::Right) {
+            let new_pos = state.tet_pos.add_x(1);
+            state.move_colliding_tetromino(new_pos);
+        } else if input.is_front_edge(Scancode::V) {
+            state.copy_frame();
+            for y in 0..Field::height() {
+                if state.field.is_line_filled(y) {
+                    state.filled_lines_animation.start();
+                    break;
+                }
+            }
+        } else if input.is_front_edge(Scancode::R) {
+            state.clean_filled_lines();
         }
+    }
+
+    pub fn tick(state: &mut State) {
+        state.fall_timer.tick();
+        state.filled_lines_animation.tick();
+
+        if state.filled_lines_animation.is_triggered() {
+            state.clean_filled_lines();
+            state.fall_timer.start();
+            state.finish_turn();
+        }
+        if state.fall_timer.is_triggered() {
+            state.fall_timer.start();
+            state.move_down();
+        }
+    }
+
+    pub fn draw(state: &State, buf: &mut ScreenBuffer) {
+        crate::video::draw_rect(buf, state.field_pos, Field::width() + 2, Field::height() + 2, b"+");
+
+        for y in 0..Field::height() {
+            let pos_y = state.field_pos.y + y + 1;
+            if !state.field.is_line_filled(y) || state.filled_lines_animation.is_show() {
+                for x in 0..Field::width() {
+                    let pos_x = state.field_pos.x + x + 1;
+                    if state.field.is_filled(Point::new(x, y)) {
+                        buf.draw_chars(Point::new(pos_x, pos_y), &[0xb1u8]);
+                    }
+                }
+            }
+        }
+
+        if !state.filled_lines_animation.is_started() {
+            for y in 0..Frame::height() {
+                for x in 0..Frame::width() {
+                    let pos = state.tet_pos + state.field_pos + Point::new(1, 1) + Point::new(x, y);
+                    if state.current_frame().is_filled(Point::new(x, y)) {
+                        buf.draw_chars(pos, &[0xb1u8]);
+                    }
+                }
+            }
+        }
+
+        for y in 0..Frame::height() {
+            for x in 0..Frame::width() {
+                let pos = state.field_pos.add_x(Field::width() + 4).add_y(Field::height() / 2) + Point::new(x, y);
+                if state.tetrominos[state.next_tet_index].frames[0].is_filled(Point::new(x, y)) {
+                    buf.draw_chars(pos, &[0xb1u8]);
+                }
+            }
+        }
+
+        if state.field.is_collide(state.current_frame(), state.tet_pos) {
+            buf.draw_chars(state.field_pos.add_x(Field::width() + 2 + 3), b"c");
+        }
+    }
+}
+
+struct RetryScreen;
+
+impl RetryScreen {
+    pub fn enter(_state: &mut State) {
+
+    }
+
+    pub fn leave(_state: &mut State) {
+
+    }
+
+    pub fn handle_input(state: &mut State, input: &Input) {
+        if input.is_front_edge(Scancode::Space) {
+            state.change_screen(Screen::Game);
+        }
+    }
+
+    pub fn tick(_state: &mut State) {
+
+    }
+
+    pub fn draw(_state: &State, buf: &mut ScreenBuffer) {
+        buf.draw_chars(Point::new(0, 0), b"Game over.");
+        buf.draw_chars(Point::new(0, 1), b"Press space to try again.");
     }
 }

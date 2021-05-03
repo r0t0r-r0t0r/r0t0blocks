@@ -61,6 +61,12 @@ impl BlinkAnimation {
         self.timer.start();
     }
 
+    pub fn stop(&mut self) {
+        self.timer.stop();
+        self.changes_remain = 0;
+        self.show = true;
+    }
+
     pub fn tick(&mut self) {
         self.timer.tick();
 
