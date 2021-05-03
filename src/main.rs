@@ -87,6 +87,7 @@ fn main() -> Result<(), String> {
         Scancode::Right,
         Scancode::V,
         Scancode::R,
+        Scancode::Escape,
     ]);
 
     let update_period = 1.0 / 120.0;

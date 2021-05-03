@@ -364,6 +364,7 @@ pub struct State<'frame> {
     filled_lines_animation: BlinkAnimation,
     rng: Rng,
     screen: Screen,
+    popup_screen: Option<Screen>,
 
     // visualisation
     field_pos: Point,
@@ -391,6 +392,8 @@ impl<'frame> State<'frame> {
 
         let rng = Rng::new();
 
+        let initial_screen = Screen::Game;
+
         let mut state = State {
             tetrominos,
             curr_frame: 0,
@@ -402,10 +405,11 @@ impl<'frame> State<'frame> {
             fall_timer,
             filled_lines_animation: BlinkAnimation::new(),
             rng,
-            screen: Screen::Game,
+            screen: initial_screen,
+            popup_screen: None,
         };
 
-        state.enter_screen();
+        initial_screen.enter(&mut state);
 
         state
     }
@@ -493,47 +497,39 @@ impl<'frame> State<'frame> {
         }
     }
 
-    fn enter_screen(&mut self) {
-        match self.screen {
-            Screen::Game => GameScreen::enter(self),
-            Screen::Retry => RetryScreen::enter(self),
-        }
-    }
-
     pub fn change_screen(&mut self, new_screen: Screen) {
         if self.screen == new_screen {
             return;
         }
 
-        match self.screen {
-            Screen::Game => GameScreen::leave(self),
-            Screen::Retry => RetryScreen::leave(self),
-        }
-
         self.screen = new_screen;
 
-        self.enter_screen();
+        new_screen.enter(self);
+    }
+
+    pub fn open_popup_screen(&mut self, popup_screen: Screen) {
+        if self.popup_screen.is_none() {
+            self.popup_screen = Some(popup_screen);
+        }
+    }
+
+    pub fn close_popup_screen(&mut self) {
+        self.popup_screen = None;
     }
 
     pub fn handle_input(&mut self, input: &Input) {
-        match self.screen {
-            Screen::Game => GameScreen::handle_input(self, input),
-            Screen::Retry => RetryScreen::handle_input(self, input),
-        }
+        let current_screen = self.popup_screen.unwrap_or(self.screen);
+        current_screen.handle_input(self, input);
     }
 
     pub fn tick(&mut self) {
-        match self.screen {
-            Screen::Game => GameScreen::tick(self),
-            Screen::Retry => RetryScreen::tick(self),
-        }
+        let current_screen = self.popup_screen.unwrap_or(self.screen);
+        current_screen.tick(self);
     }
 
     pub fn draw(&self, buf: &mut ScreenBuffer) {
-        match self.screen {
-            Screen::Game => GameScreen::draw(self, buf),
-            Screen::Retry => RetryScreen::draw(self, buf),
-        }
+        let current_screen = self.popup_screen.unwrap_or(self.screen);
+        current_screen.draw(self, buf);
     }
 }
 
@@ -541,6 +537,41 @@ impl<'frame> State<'frame> {
 pub enum Screen {
     Game,
     Retry,
+    Pause,
+}
+
+impl Screen {
+    pub fn enter(&self, state: &mut State) {
+        match self {
+            Screen::Game => GameScreen::enter(state),
+            Screen::Retry => RetryScreen::enter(state),
+            Screen::Pause => PauseScreen::enter(state),
+        }
+    }
+
+    pub fn handle_input(&self, state: &mut State, input: &Input) {
+        match self {
+            Screen::Game => GameScreen::handle_input(state, input),
+            Screen::Retry => RetryScreen::handle_input(state, input),
+            Screen::Pause => PauseScreen::handle_input(state, input),
+        }
+    }
+
+    pub fn tick(&self, state: &mut State) {
+        match self {
+            Screen::Game => GameScreen::tick(state),
+            Screen::Retry => RetryScreen::tick(state),
+            Screen::Pause => PauseScreen::tick(state),
+        }
+    }
+
+    pub fn draw(&self, state: &State, buf: &mut ScreenBuffer) {
+        match self {
+            Screen::Game => GameScreen::draw(state, buf),
+            Screen::Retry => RetryScreen::draw(state, buf),
+            Screen::Pause => PauseScreen::draw(state, buf),
+        }
+    }
 }
 
 struct GameScreen;
@@ -553,11 +584,6 @@ impl GameScreen {
         state.curr_frame = 0;
         state.field.clear();
         state.tet_pos = State::spawn_pos();
-    }
-
-    pub fn leave(state: &mut State) {
-        state.fall_timer.stop();
-        state.filled_lines_animation.stop();
     }
 
     pub fn handle_input(state: &mut State, input: &Input) {
@@ -589,6 +615,8 @@ impl GameScreen {
             }
         } else if input.is_front_edge(Scancode::R) {
             state.clean_filled_lines();
+        } else if input.is_front_edge(Scancode::Escape) {
+            state.open_popup_screen(Screen::Pause);
         }
     }
 
@@ -655,10 +683,6 @@ impl RetryScreen {
 
     }
 
-    pub fn leave(_state: &mut State) {
-
-    }
-
     pub fn handle_input(state: &mut State, input: &Input) {
         if input.is_front_edge(Scancode::Space) {
             state.change_screen(Screen::Game);
@@ -672,5 +696,27 @@ impl RetryScreen {
     pub fn draw(_state: &State, buf: &mut ScreenBuffer) {
         buf.draw_chars(Point::new(0, 0), b"Game over.");
         buf.draw_chars(Point::new(0, 1), b"Press space to try again.");
+    }
+}
+
+struct PauseScreen;
+
+impl PauseScreen {
+    pub fn enter(_state: &mut State) {
+
+    }
+
+    pub fn handle_input(state: &mut State, input: &Input) {
+        if input.is_front_edge(Scancode::Escape) {
+            state.close_popup_screen();
+        }
+    }
+
+    pub fn tick(_state: &mut State) {
+
+    }
+
+    pub fn draw(_state: &State, buf: &mut ScreenBuffer) {
+        buf.draw_chars(Point::new(0, 0), b"Pause.");
     }
 }
