@@ -594,8 +594,7 @@ impl GameScreen {
         } else if input.is_front_edge(Scancode::Space) {
             state.rotate_colliding_tetromino();
         } else if input.is_front_edge(Scancode::Up) {
-            let new_pos = state.tet_pos.sub_y(1);
-            state.move_colliding_tetromino(new_pos);
+            state.rotate_colliding_tetromino();
         } else if input.is_front_edge(Scancode::Down) {
             let new_pos = state.tet_pos.add_y(1);
             state.move_colliding_tetromino(new_pos);
@@ -668,10 +667,6 @@ impl GameScreen {
                     buf.draw_chars(pos, &[0xb1u8]);
                 }
             }
-        }
-
-        if state.field.is_collide(state.current_frame(), state.tet_pos) {
-            buf.draw_chars(state.field_pos.add_x(Field::width() + 2 + 3), b"c");
         }
     }
 }
