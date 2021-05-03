@@ -234,25 +234,26 @@ impl Input {
 struct TimerEvent;
 
 struct State<'frame> {
+    // external
     tetrominos: [Tetromino<'frame>; 7],
 
+    // logic
     curr_frame: usize,
     curr_tet_index: usize,
     next_tet_index: usize,
     field: Field,
-    field_pos: Point,
     tet_pos: Point,
     fall_timer: Timer,
     flashing_animation: BlinkAnimation,
     rng: Rng,
+
+    // visualisation
+    field_pos: Point,
 }
 
 impl<'frame> State<'frame> {
-    fn spawn_pos(field_pos: Point) -> Point {
-        let tet_x: Number = field_pos.x + 1 + (Field::width() - Frame::width()) / 2;
-        let tet_y: Number = field_pos.y;
-
-        Point::new(tet_x, tet_y)
+    fn spawn_pos() -> Point {
+        Point::new((Field::width() - Frame::width()) / 2, -1)
     }
 
     pub fn new(frames: &'frame [Vec<Frame>; 7]) -> State {
@@ -286,7 +287,7 @@ impl<'frame> State<'frame> {
             next_tet_index,
             field: Field::new(),
             field_pos,
-            tet_pos: Self::spawn_pos(field_pos),
+            tet_pos: Self::spawn_pos(),
             fall_timer,
             flashing_animation: BlinkAnimation::new(),
             rng,
@@ -307,12 +308,8 @@ impl<'frame> State<'frame> {
         self.tetrominos[self.curr_tet_index].frames[self.curr_frame]
     }
 
-    fn translate_tet_to_field_pos(&self, p: Point) -> Point {
-        p - self.field_pos - Point::new(1, 1)
-    }
-
     fn copy_frame(&mut self) {
-        let pos = self.translate_tet_to_field_pos(self.tet_pos);
+        let pos = self.tet_pos;
         let curr_frame = self.current_frame();
         self.field.copy_frame(curr_frame, pos);
     }
@@ -346,7 +343,7 @@ impl<'frame> State<'frame> {
         if !self.flashing_animation.is_started() {
             for y in 0..Frame::height() {
                 for x in 0..Frame::width() {
-                    let pos = self.tet_pos + Point::new(x, y);
+                    let pos = self.tet_pos + self.field_pos + Point::new(1, 1) + Point::new(x, y);
                     if self.current_frame().is_filled(Point::new(x, y)) {
                         draw_chars(buf, pos, &[0xb1u8]);
                     }
@@ -363,7 +360,7 @@ impl<'frame> State<'frame> {
             }
         }
 
-        if self.field.is_collide(self.current_frame(), self.translate_tet_to_field_pos(self.tet_pos)) {
+        if self.field.is_collide(self.current_frame(), self.tet_pos) {
             draw_chars(buf, self.field_pos.add_x(Field::width() + 2 + 3), b"c");
         }
     }
@@ -372,8 +369,8 @@ impl<'frame> State<'frame> {
         if self.flashing_animation.is_started() {
             return;
         }
-        if self.is_collide(self.current_frame(), self.translate_tet_to_field_pos(self.tet_pos)) ||
-            !self.is_collide(self.current_frame(), self.translate_tet_to_field_pos(new_pos)) {
+        if self.is_collide(self.current_frame(), self.tet_pos) ||
+            !self.is_collide(self.current_frame(), new_pos) {
             self.tet_pos = new_pos;
         }
     }
@@ -385,8 +382,8 @@ impl<'frame> State<'frame> {
     fn rotate_colliding_tetromino(&mut self) {
         let new_frame_index = self.next_frame();
         let new_frame = self.tetrominos[self.curr_tet_index].frames[new_frame_index];
-        if self.is_collide(self.current_frame(), self.translate_tet_to_field_pos(self.tet_pos)) ||
-            !self.is_collide(new_frame, self.translate_tet_to_field_pos(self.tet_pos)) {
+        if self.is_collide(self.current_frame(), self.tet_pos) ||
+            !self.is_collide(new_frame, self.tet_pos) {
             self.curr_frame = new_frame_index;
         }
     }
@@ -395,17 +392,17 @@ impl<'frame> State<'frame> {
         self.curr_tet_index = self.next_tet_index;
         self.next_tet_index = self.rng.usize(0..7);
         self.curr_frame = 0;
-        self.tet_pos = Self::spawn_pos(self.field_pos);
+        self.tet_pos = Self::spawn_pos();
     }
 
     fn move_down(&mut self) {
-        if self.is_collide(self.current_frame(), self.translate_tet_to_field_pos(self.tet_pos)) {
+        if self.is_collide(self.current_frame(), self.tet_pos) {
             return;
         }
 
         let new_pos = self.tet_pos.add_y(1);
 
-        if !self.is_collide(self.current_frame(), self.translate_tet_to_field_pos(new_pos)) {
+        if !self.is_collide(self.current_frame(), new_pos) {
             self.tet_pos = new_pos;
         } else {
             self.copy_frame();
