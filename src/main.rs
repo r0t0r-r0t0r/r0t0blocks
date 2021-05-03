@@ -235,19 +235,20 @@ struct TimerEvent;
 
 struct State<'frame> {
     tetrominos: [Tetromino<'frame>; 7],
+
     curr_frame: usize,
     curr_tet_index: usize,
     next_tet_index: usize,
     field: Field,
     field_pos: Point,
-    pub tet_pos: Point,
+    tet_pos: Point,
     fall_timer: Timer,
     flashing_animation: BlinkAnimation,
     rng: Rng,
 }
 
 impl<'frame> State<'frame> {
-    pub fn spawn_pos(field_pos: Point) -> Point {
+    fn spawn_pos(field_pos: Point) -> Point {
         let tet_x: Number = field_pos.x + 1 + (Field::width() - Frame::width()) / 2;
         let tet_y: Number = field_pos.y;
 
@@ -292,35 +293,35 @@ impl<'frame> State<'frame> {
         }
     }
 
-    pub fn next_tetromino(&mut self) {
+    fn next_tetromino(&mut self) {
         self.curr_tet_index = (self.curr_tet_index + 1) % self.tetrominos.len();
         self.curr_frame = 0;
     }
 
-    pub fn prev_tetromino(&mut self) {
+    fn prev_tetromino(&mut self) {
         self.curr_tet_index = (self.tetrominos.len() + self.curr_tet_index - 1) % self.tetrominos.len();
         self.curr_frame = 0;
     }
 
-    pub fn current_frame(&self) -> &'frame Frame {
+    fn current_frame(&self) -> &'frame Frame {
         self.tetrominos[self.curr_tet_index].frames[self.curr_frame]
     }
 
-    pub fn translate_tet_to_field_pos(&self, p: Point) -> Point {
+    fn translate_tet_to_field_pos(&self, p: Point) -> Point {
         p - self.field_pos - Point::new(1, 1)
     }
 
-    pub fn copy_frame(&mut self) {
+    fn copy_frame(&mut self) {
         let pos = self.translate_tet_to_field_pos(self.tet_pos);
         let curr_frame = self.current_frame();
         self.field.copy_frame(curr_frame, pos);
     }
 
-    pub fn is_collide(&self, frame: &'frame Frame, p: Point) -> bool {
+    fn is_collide(&self, frame: &'frame Frame, p: Point) -> bool {
         self.field.is_collide(frame, p)
     }
 
-    pub fn clean_filled_lines(&mut self) {
+    fn clean_filled_lines(&mut self) {
         self.field.clean_filled_lines();
     }
 
@@ -367,7 +368,7 @@ impl<'frame> State<'frame> {
         }
     }
 
-    pub fn move_colliding_tetromino(&mut self, new_pos: Point) {
+    fn move_colliding_tetromino(&mut self, new_pos: Point) {
         if self.flashing_animation.is_started() {
             return;
         }
@@ -381,7 +382,7 @@ impl<'frame> State<'frame> {
         (self.curr_frame + 1) % 4
     }
 
-    pub fn rotate_colliding_tetromino(&mut self) {
+    fn rotate_colliding_tetromino(&mut self) {
         let new_frame_index = self.next_frame();
         let new_frame = self.tetrominos[self.curr_tet_index].frames[new_frame_index];
         if self.is_collide(self.current_frame(), self.translate_tet_to_field_pos(self.tet_pos)) ||
@@ -397,7 +398,7 @@ impl<'frame> State<'frame> {
         self.tet_pos = Self::spawn_pos(self.field_pos);
     }
 
-    pub fn move_down(&mut self) {
+    fn move_down(&mut self) {
         if self.is_collide(self.current_frame(), self.translate_tet_to_field_pos(self.tet_pos)) {
             return;
         }
