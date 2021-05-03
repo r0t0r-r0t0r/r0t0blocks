@@ -1,59 +1,14 @@
 use std::convert::TryFrom;
-use std::ops::{Add, Sub};
+
+use fastrand::Rng;
+use sdl2::keyboard::Scancode;
+
+use crate::geometry::Point;
+use crate::input::Input;
+use crate::video::ScreenBuffer;
+use crate::time::{BlinkAnimation, Timer};
 
 pub type Number = i32;
-
-#[derive(Copy, Clone, Eq, PartialEq)]
-pub struct Point {
-    pub x: Number,
-    pub y: Number,
-}
-
-impl Point {
-    pub fn new(x: Number, y: Number) -> Point {
-        Point { x, y }
-    }
-
-    pub fn add_x(&self, x: Number) -> Point {
-        Point::new(self.x + x, self.y)
-    }
-
-    pub fn add_y(&self, y: Number) -> Point {
-        Point::new(self.x, self.y + y)
-    }
-
-    pub fn sub_x(&self, x: Number) -> Point {
-        Point::new(self.x - x, self.y)
-    }
-
-    pub fn sub_y(&self, y: Number) -> Point {
-        Point::new(self.x, self.y - y)
-    }
-
-    pub fn with_x(&self, x: Number) -> Point {
-        Point::new(x, self.y)
-    }
-
-    pub fn with_y(&self, y: Number) -> Point {
-        Point::new(self.x, y)
-    }
-}
-
-impl Add for Point {
-    type Output = Self;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        Point::new(self.x + rhs.x, self.y + rhs.y)
-    }
-}
-
-impl Sub for Point {
-    type Output = Self;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        Point::new(self.x - rhs.x, self.y - rhs.y)
-    }
-}
 
 const FRAME_SIDE: usize = 4;
 
@@ -388,5 +343,233 @@ impl Field {
         }
 
         return false;
+    }
+}
+
+pub struct State<'frame> {
+    // external
+    tetrominos: [Tetromino<'frame>; 7],
+
+    // logic
+    curr_frame: usize,
+    curr_tet_index: usize,
+    next_tet_index: usize,
+    field: Field,
+    tet_pos: Point,
+    fall_timer: Timer,
+    flashing_animation: BlinkAnimation,
+    rng: Rng,
+
+    // visualisation
+    field_pos: Point,
+}
+
+impl<'frame> State<'frame> {
+    fn spawn_pos() -> Point {
+        Point::new((Field::width() - Frame::width()) / 2, -1)
+    }
+
+    pub fn new(frames: &'frame [Vec<Frame>; 7]) -> State {
+        let tetrominos = [
+            Tetromino::new(&frames[0]),
+            Tetromino::new(&frames[1]),
+            Tetromino::new(&frames[2]),
+            Tetromino::new(&frames[3]),
+            Tetromino::new(&frames[4]),
+            Tetromino::new(&frames[5]),
+            Tetromino::new(&frames[6]),
+        ];
+
+        let field_pos = Point::new(3, 3);
+
+        let mut fall_timer = Timer::new(120);
+        fall_timer.start();
+
+        let mut field_line_timer = Timer::new(15);
+        field_line_timer.start();
+
+        //let rng = Rng::with_seed(42);
+        let rng = Rng::new();
+        let curr_tet_index = rng.usize(0..7);
+        let next_tet_index = rng.usize(0..7);
+
+        State {
+            tetrominos,
+            curr_frame: 0,
+            curr_tet_index,
+            next_tet_index,
+            field: Field::new(),
+            field_pos,
+            tet_pos: Self::spawn_pos(),
+            fall_timer,
+            flashing_animation: BlinkAnimation::new(),
+            rng,
+        }
+    }
+
+    fn next_tetromino(&mut self) {
+        self.curr_tet_index = (self.curr_tet_index + 1) % self.tetrominos.len();
+        self.curr_frame = 0;
+    }
+
+    fn prev_tetromino(&mut self) {
+        self.curr_tet_index = (self.tetrominos.len() + self.curr_tet_index - 1) % self.tetrominos.len();
+        self.curr_frame = 0;
+    }
+
+    fn current_frame(&self) -> &'frame Frame {
+        self.tetrominos[self.curr_tet_index].frames[self.curr_frame]
+    }
+
+    fn copy_frame(&mut self) {
+        let pos = self.tet_pos;
+        let curr_frame = self.current_frame();
+        self.field.copy_frame(curr_frame, pos);
+    }
+
+    fn is_collide(&self, frame: &'frame Frame, p: Point) -> bool {
+        self.field.is_collide(frame, p)
+    }
+
+    fn clean_filled_lines(&mut self) {
+        self.field.clean_filled_lines();
+    }
+
+    pub fn draw(&self, buf: &mut ScreenBuffer) {
+        crate::video::draw_rect(buf, self.field_pos, Field::width() + 2, Field::height() + 2, b"+");
+
+        for y in 0..Field::height() {
+            let pos_y = self.field_pos.y + y + 1;
+            if !self.field.is_line_filled(y) || self.flashing_animation.is_show() {
+                for x in 0..Field::width() {
+                    let pos_x = self.field_pos.x + x + 1;
+                    if self.field.is_filled(Point::new(x, y)) {
+                        buf.draw_chars(Point::new(pos_x, pos_y), &[0xb1u8]);
+                    }
+                }
+            }
+        }
+
+        if !self.flashing_animation.is_started() {
+            for y in 0..Frame::height() {
+                for x in 0..Frame::width() {
+                    let pos = self.tet_pos + self.field_pos + Point::new(1, 1) + Point::new(x, y);
+                    if self.current_frame().is_filled(Point::new(x, y)) {
+                        buf.draw_chars(pos, &[0xb1u8]);
+                    }
+                }
+            }
+        }
+
+        for y in 0..Frame::height() {
+            for x in 0..Frame::width() {
+                let pos = self.field_pos.add_x(Field::width() + 4).add_y(Field::height() / 2) + Point::new(x, y);
+                if self.tetrominos[self.next_tet_index].frames[0].is_filled(Point::new(x, y)) {
+                    buf.draw_chars(pos, &[0xb1u8]);
+                }
+            }
+        }
+
+        if self.field.is_collide(self.current_frame(), self.tet_pos) {
+            buf.draw_chars(self.field_pos.add_x(Field::width() + 2 + 3), b"c");
+        }
+    }
+
+    fn move_colliding_tetromino(&mut self, new_pos: Point) {
+        if self.flashing_animation.is_started() {
+            return;
+        }
+        if self.is_collide(self.current_frame(), self.tet_pos) ||
+            !self.is_collide(self.current_frame(), new_pos) {
+            self.tet_pos = new_pos;
+        }
+    }
+
+    fn next_frame(&self) -> usize {
+        (self.curr_frame + 1) % 4
+    }
+
+    fn rotate_colliding_tetromino(&mut self) {
+        let new_frame_index = self.next_frame();
+        let new_frame = self.tetrominos[self.curr_tet_index].frames[new_frame_index];
+        if self.is_collide(self.current_frame(), self.tet_pos) ||
+            !self.is_collide(new_frame, self.tet_pos) {
+            self.curr_frame = new_frame_index;
+        }
+    }
+
+    fn finish_turn(&mut self) {
+        self.curr_tet_index = self.next_tet_index;
+        self.next_tet_index = self.rng.usize(0..7);
+        self.curr_frame = 0;
+        self.tet_pos = Self::spawn_pos();
+    }
+
+    fn move_down(&mut self) {
+        if self.is_collide(self.current_frame(), self.tet_pos) {
+            return;
+        }
+
+        let new_pos = self.tet_pos.add_y(1);
+
+        if !self.is_collide(self.current_frame(), new_pos) {
+            self.tet_pos = new_pos;
+        } else {
+            self.copy_frame();
+
+            if self.field.is_any_line_filled() {
+                self.flashing_animation.start();
+                self.fall_timer.stop();
+            } else {
+                self.finish_turn();
+            }
+        }
+    }
+
+    pub fn handle_input(&mut self, input: &Input) {
+        if input.is_front_edge(Scancode::Equals) {
+            self.next_tetromino();
+        } else if input.is_front_edge(Scancode::Minus) {
+            self.prev_tetromino();
+        } else if input.is_front_edge(Scancode::Space) {
+            self.rotate_colliding_tetromino();
+        } else if input.is_front_edge(Scancode::Up) {
+            let new_pos = self.tet_pos.sub_y(1);
+            self.move_colliding_tetromino(new_pos);
+        } else if input.is_front_edge(Scancode::Down) {
+            let new_pos = self.tet_pos.add_y(1);
+            self.move_colliding_tetromino(new_pos);
+        } else if input.is_front_edge(Scancode::Left) {
+            let new_pos = self.tet_pos.sub_x(1);
+            self.move_colliding_tetromino(new_pos);
+        } else if input.is_front_edge(Scancode::Right) {
+            let new_pos = self.tet_pos.add_x(1);
+            self.move_colliding_tetromino(new_pos);
+        } else if input.is_front_edge(Scancode::V) {
+            self.copy_frame();
+            for y in 0..Field::height() {
+                if self.field.is_line_filled(y) {
+                    self.flashing_animation.start();
+                    break;
+                }
+            }
+        } else if input.is_front_edge(Scancode::R) {
+            self.clean_filled_lines();
+        }
+    }
+
+    pub fn tick(&mut self) {
+        self.fall_timer.tick();
+        self.flashing_animation.tick();
+
+        if self.flashing_animation.is_triggered() {
+            self.clean_filled_lines();
+            self.fall_timer.start();
+            self.finish_turn();
+        }
+        if self.fall_timer.is_triggered() {
+            self.fall_timer.start();
+            self.move_down();
+        }
     }
 }
