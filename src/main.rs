@@ -335,9 +335,6 @@ impl<'frame> State<'frame> {
                     }
                 }
             }
-            if self.field.is_line_filled(y) {
-                draw_chars(buf, self.field_pos.with_y(pos_y).add_x(Field::width() + 2), b"&");
-            }
         }
 
         if !self.flashing_animation.is_started() {
