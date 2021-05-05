@@ -6,7 +6,7 @@ use sdl2::keyboard::Scancode;
 use crate::geometry::Point;
 use crate::input::Input;
 use crate::video::ScreenBuffer;
-use crate::time::{BlinkAnimation, Timer};
+use crate::time::{BlinkAnimation, Timer, DelayedRepeat, TimeAware};
 
 pub type Number = i32;
 
@@ -365,6 +365,9 @@ pub struct State<'frame> {
     rng: Rng,
     screen: Screen,
     popup_screen: Option<Screen>,
+    left_repeater: DelayedRepeat,
+    right_repeater: DelayedRepeat,
+    down_repeater: DelayedRepeat,
 
     // visualisation
     field_pos: Point,
@@ -407,6 +410,9 @@ impl<'frame> State<'frame> {
             rng,
             screen: initial_screen,
             popup_screen: None,
+            left_repeater: DelayedRepeat::new(30, 5),
+            right_repeater: DelayedRepeat::new(30, 5),
+            down_repeater: DelayedRepeat::new(30, 3),
         };
 
         initial_screen.enter(&mut state);
@@ -466,6 +472,9 @@ impl<'frame> State<'frame> {
     }
 
     fn finish_turn(&mut self) {
+        self.left_repeater.stop();
+        self.right_repeater.stop();
+        self.down_repeater.stop();
         self.curr_tet_index = self.next_tet_index;
         self.next_tet_index = self.rng.usize(0..7);
         self.curr_frame = 0;
@@ -510,6 +519,7 @@ impl<'frame> State<'frame> {
     pub fn open_popup_screen(&mut self, popup_screen: Screen) {
         if self.popup_screen.is_none() {
             self.popup_screen = Some(popup_screen);
+            popup_screen.enter(self);
         }
     }
 
@@ -587,6 +597,16 @@ impl GameScreen {
     }
 
     pub fn handle_input(state: &mut State, input: &Input) {
+        if input.is_back_edge(Scancode::Left) {
+            state.left_repeater.stop();
+        }
+        if input.is_back_edge(Scancode::Right) {
+            state.right_repeater.stop();
+        }
+        if input.is_back_edge(Scancode::Down) {
+            state.down_repeater.stop();
+        }
+
         if input.is_front_edge(Scancode::Equals) {
             state.next_tetromino();
         } else if input.is_front_edge(Scancode::Minus) {
@@ -598,12 +618,17 @@ impl GameScreen {
         } else if input.is_front_edge(Scancode::Down) {
             let new_pos = state.tet_pos.add_y(1);
             state.move_colliding_tetromino(new_pos);
+            state.down_repeater.start();
         } else if input.is_front_edge(Scancode::Left) {
             let new_pos = state.tet_pos.sub_x(1);
             state.move_colliding_tetromino(new_pos);
+            state.left_repeater.start();
+            state.right_repeater.stop();
         } else if input.is_front_edge(Scancode::Right) {
             let new_pos = state.tet_pos.add_x(1);
             state.move_colliding_tetromino(new_pos);
+            state.right_repeater.start();
+            state.left_repeater.stop();
         } else if input.is_front_edge(Scancode::V) {
             state.copy_frame();
             for y in 0..Field::height() {
@@ -620,9 +645,24 @@ impl GameScreen {
     }
 
     pub fn tick(state: &mut State) {
+        state.left_repeater.tick();
+        state.right_repeater.tick();
+        state.down_repeater.tick();
         state.fall_timer.tick();
         state.filled_lines_animation.tick();
 
+        if state.left_repeater.is_triggered() {
+            let new_pos = state.tet_pos.sub_x(1);
+            state.move_colliding_tetromino(new_pos);
+        }
+        if state.right_repeater.is_triggered() {
+            let new_pos = state.tet_pos.add_x(1);
+            state.move_colliding_tetromino(new_pos);
+        }
+        if state.down_repeater.is_triggered() {
+            let new_pos = state.tet_pos.add_y(1);
+            state.move_colliding_tetromino(new_pos);
+        }
         if state.filled_lines_animation.is_triggered() {
             state.clean_filled_lines();
             state.fall_timer.start();
@@ -697,8 +737,10 @@ impl RetryScreen {
 struct PauseScreen;
 
 impl PauseScreen {
-    pub fn enter(_state: &mut State) {
-
+    pub fn enter(state: &mut State) {
+        state.left_repeater.stop();
+        state.right_repeater.stop();
+        state.down_repeater.stop();
     }
 
     pub fn handle_input(state: &mut State, input: &Input) {

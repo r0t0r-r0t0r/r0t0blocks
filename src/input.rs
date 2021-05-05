@@ -79,4 +79,12 @@ impl Input {
             false
         }
     }
+
+    pub fn is_back_edge(&self, scancode: Scancode) -> bool {
+        if let Some(latch) = self.keys.get(&scancode) {
+            latch.is_back_edge()
+        } else {
+            false
+        }
+    }
 }

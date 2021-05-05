@@ -3,6 +3,7 @@ use crate::blocks::Number;
 pub struct Timer {
     period: Number,
     current: Number,
+    next_current: Option<Number>,
 }
 
 impl Timer {
@@ -10,10 +11,15 @@ impl Timer {
         Timer {
             period,
             current: period + 1,
+            next_current: None,
         }
     }
 
     pub fn tick(&mut self) {
+        if let Some(current) = self.next_current {
+            self.current = current;
+            self.next_current = None;
+        }
         if self.current <= self.period {
             self.current += 1;
         }
@@ -32,11 +38,11 @@ impl Timer {
     }
 
     pub fn start(&mut self) {
-        self.current = 0;
+        self.next_current = Some(0);
     }
 
     pub fn stop(&mut self) {
-        self.current = self.period + 1;
+        self.next_current = Some(self.period + 1);
     }
 }
 
@@ -94,5 +100,57 @@ impl BlinkAnimation {
     }
     pub fn is_started(&self) -> bool {
         self.is_not_triggered_yet() || self.is_triggered()
+    }
+}
+
+pub trait TimeAware {
+    fn tick(&mut self);
+    fn start(&mut self);
+    fn stop(&mut self);
+    fn is_started(&self) -> bool;
+}
+
+pub struct DelayedRepeat {
+    delay: Timer,
+    repeat: Timer,
+}
+
+impl DelayedRepeat {
+    pub fn new(delay: Number, repeat: Number) -> DelayedRepeat {
+        DelayedRepeat {
+            delay: Timer::new(delay),
+            repeat: Timer::new(repeat),
+        }
+    }
+
+    pub fn is_triggered(&self) -> bool {
+        self.delay.is_triggered() || self.repeat.is_triggered()
+    }
+}
+
+impl TimeAware for DelayedRepeat {
+    fn tick(&mut self) {
+        self.delay.tick();
+        self.repeat.tick();
+
+        if self.delay.is_triggered() {
+            self.repeat.start();
+        } else if self.repeat.is_triggered() {
+            self.repeat.start();
+        }
+    }
+
+    fn start(&mut self) {
+        self.delay.start();
+        self.repeat.stop();
+    }
+
+    fn stop(&mut self) {
+        self.delay.stop();
+        self.repeat.stop();
+    }
+
+    fn is_started(&self) -> bool {
+        self.delay.is_started() || self.repeat.is_started()
     }
 }
