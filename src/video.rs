@@ -1,7 +1,7 @@
 use std::cmp::{max, min};
 use std::iter;
 
-use crate::blocks::Number;
+use crate::base::Number;
 use crate::geometry::Point;
 
 pub struct ScreenBuffer {

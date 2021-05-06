@@ -1,6 +1,6 @@
 use std::ops::{Add, Sub};
 
-use crate::blocks::Number;
+use crate::base::Number;
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub struct Point {

@@ -3,12 +3,11 @@ use std::convert::TryFrom;
 use fastrand::Rng;
 use sdl2::keyboard::Scancode;
 
+use crate::base::Number;
 use crate::geometry::Point;
 use crate::input::Input;
+use crate::time::{BlinkAnimation, DelayedRepeat, TimeAware, Timer};
 use crate::video::ScreenBuffer;
-use crate::time::{BlinkAnimation, Timer, DelayedRepeat, TimeAware};
-
-pub type Number = i32;
 
 const FRAME_SIDE: usize = 4;
 

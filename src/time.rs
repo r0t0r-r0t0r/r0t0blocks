@@ -1,4 +1,4 @@
-use crate::blocks::Number;
+use crate::base::Number;
 
 pub struct Timer {
     period: Number,
