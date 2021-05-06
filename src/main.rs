@@ -16,6 +16,7 @@ use input::Input;
 use video::ScreenBuffer;
 
 use crate::blocks::create_frames;
+use crate::geometry::Point;
 
 struct TimerEvent;
 
@@ -98,8 +99,8 @@ fn main() -> Result<(), String> {
     let frames = create_frames();
     let mut state = State::new(&frames);
 
-    let mut ticks_per_second = 0;
-    let mut ticks_counter = 0;
+    let mut fps = 0;
+    let mut fps_counter = 0;
     let mut ticks_prev = Instant::now();
 
     while !is_quit {
@@ -122,20 +123,21 @@ fn main() -> Result<(), String> {
 
                 if is_drawing_tick {
 
-                    // ticks_counter += 1;
-                    // let now = Instant::now();
-                    // let delta = (now - ticks_prev).as_secs_f64();
-                    // if delta >= 1.0 {
-                    //     ticks_per_second = ((ticks_counter as f64) / delta) as i32;
-                    //     ticks_counter = 0;
-                    //     ticks_prev = now;
-                    //     println!("{}", ticks_per_second);
-                    // }
+                    fps_counter += 1;
+                    let now = Instant::now();
+                    let delta = (now - ticks_prev).as_secs_f64();
+                    if delta >= 1.0 {
+                        fps = ((fps_counter as f64) / delta) as i32;
+                        fps_counter = 0;
+                        ticks_prev = now;
+                    }
 
                     // render chars
                     screen_buffer.clear();
 
                     state.draw(&mut screen_buffer);
+
+                    screen_buffer.draw_chars(Point::new(0, 0), fps.to_string().as_bytes());
 
                     canvas.clear();
                     for y in 0..tile_count.1 {
