@@ -3,7 +3,7 @@ use std::convert::TryFrom;
 use fastrand::Rng;
 use sdl2::keyboard::Scancode;
 
-use crate::base::Number;
+use crate::base::{Number, App};
 use crate::geometry::Point;
 use crate::input::Input;
 use crate::time::{BlinkAnimation, DelayedRepeat, TimeAware, Timer};
@@ -525,18 +525,20 @@ impl<'frame> State<'frame> {
     pub fn close_popup_screen(&mut self) {
         self.popup_screen = None;
     }
+}
 
-    pub fn handle_input(&mut self, input: &Input) {
+impl<'frame> App for State<'frame> {
+    fn handle_input(&mut self, input: &Input) {
         let current_screen = self.popup_screen.unwrap_or(self.screen);
         current_screen.handle_input(self, input);
     }
 
-    pub fn tick(&mut self) {
+    fn tick(&mut self) {
         let current_screen = self.popup_screen.unwrap_or(self.screen);
         current_screen.tick(self);
     }
 
-    pub fn draw(&self, buf: &mut ScreenBuffer) {
+    fn draw(&self, buf: &mut ScreenBuffer) {
         let current_screen = self.popup_screen.unwrap_or(self.screen);
         current_screen.draw(self, buf);
     }

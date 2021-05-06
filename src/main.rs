@@ -18,10 +18,11 @@ use video::ScreenBuffer;
 
 use crate::blocks::create_frames;
 use crate::geometry::Point;
+use crate::base::App;
 
 struct TimerEvent;
 
-fn main() -> Result<(), String> {
+pub fn run(app: &mut impl App) -> Result<(), String> {
     let scale = 1;
     let tile_count = (30, 30);
     let tile_size = (24, 24);
@@ -96,10 +97,6 @@ fn main() -> Result<(), String> {
 
     let mut is_quit = false;
 
-    // game specific definitions
-    let frames = create_frames();
-    let mut state = State::new(&frames);
-
     let mut fps = 0;
     let mut fps_counter = 0;
     let mut ticks_prev = Instant::now();
@@ -114,13 +111,11 @@ fn main() -> Result<(), String> {
                 let _ = e.as_user_event_type::<TimerEvent>()
                     .ok_or("Failed to receive user event")?;
 
-
-
                 // update world
-                state.handle_input(&input);
+                app.handle_input(&input);
 
                 input.tick();
-                state.tick();
+                app.tick();
 
                 if is_drawing_tick {
 
@@ -136,7 +131,7 @@ fn main() -> Result<(), String> {
                     // render chars
                     screen_buffer.clear();
 
-                    state.draw(&mut screen_buffer);
+                    app.draw(&mut screen_buffer);
 
                     screen_buffer.draw_chars(Point::new(0, 0), fps.to_string().as_bytes());
 
@@ -172,4 +167,11 @@ fn main() -> Result<(), String> {
     }
 
     Ok(())
+}
+
+fn main() -> Result<(), String> {
+    let frames = create_frames();
+    let mut state = State::new(&frames);
+
+    run(&mut state)
 }
