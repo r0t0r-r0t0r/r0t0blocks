@@ -90,9 +90,6 @@ fn main() -> Result<(), String> {
         Scancode::Escape,
     ]);
 
-    let update_period = 1.0 / 120.0;
-    let mut update_now = Instant::now();
-
     let mut is_drawing_tick = false;
 
     let mut is_quit = false;
@@ -100,6 +97,10 @@ fn main() -> Result<(), String> {
     // game specific definitions
     let frames = create_frames();
     let mut state = State::new(&frames);
+
+    let mut ticks_per_second = 0;
+    let mut ticks_counter = 0;
+    let mut ticks_prev = Instant::now();
 
     while !is_quit {
         let event = event_pump.wait_event();
@@ -111,18 +112,26 @@ fn main() -> Result<(), String> {
                 let _ = e.as_user_event_type::<TimerEvent>()
                     .ok_or("Failed to receive user event")?;
 
-                let new_update_now = Instant::now();
-                if (new_update_now - update_now).as_secs_f64() >= update_period {
-                    update_now = new_update_now;
 
-                    // update world
-                    state.handle_input(&input);
 
-                    input.tick();
-                    state.tick();
-                }
+                // update world
+                state.handle_input(&input);
+
+                input.tick();
+                state.tick();
 
                 if is_drawing_tick {
+
+                    // ticks_counter += 1;
+                    // let now = Instant::now();
+                    // let delta = (now - ticks_prev).as_secs_f64();
+                    // if delta >= 1.0 {
+                    //     ticks_per_second = ((ticks_counter as f64) / delta) as i32;
+                    //     ticks_counter = 0;
+                    //     ticks_prev = now;
+                    //     println!("{}", ticks_per_second);
+                    // }
+
                     // render chars
                     screen_buffer.clear();
 
