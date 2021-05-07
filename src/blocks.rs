@@ -8,6 +8,7 @@ use crate::geometry::Point;
 use crate::input::Input;
 use crate::time::{BlinkAnimation, DelayedRepeat, TimeAware, Timer};
 use crate::video::ScreenBuffer;
+use enum_dispatch::enum_dispatch;
 
 const FRAME_SIDE: usize = 4;
 
@@ -394,7 +395,7 @@ impl<'frame> State<'frame> {
 
         let rng = Rng::new();
 
-        let initial_screen = Screen::Game;
+        let initial_screen = GameScreen.into();
 
         let mut state = State {
             tetrominos,
@@ -480,7 +481,7 @@ impl<'frame> State<'frame> {
         self.tet_pos = Self::spawn_pos();
 
         if self.is_collide(self.current_frame(), self.tet_pos) {
-            self.change_screen(Screen::Retry);
+            self.change_screen(RetryScreen.into());
         }
     }
 
@@ -505,7 +506,7 @@ impl<'frame> State<'frame> {
         }
     }
 
-    pub fn change_screen(&mut self, new_screen: Screen) {
+    fn change_screen(&mut self, new_screen: Screen) {
         if self.screen == new_screen {
             return;
         }
@@ -515,7 +516,7 @@ impl<'frame> State<'frame> {
         new_screen.enter(self);
     }
 
-    pub fn open_popup_screen(&mut self, popup_screen: Screen) {
+    fn open_popup_screen(&mut self, popup_screen: Screen) {
         if self.popup_screen.is_none() {
             self.popup_screen = Some(popup_screen);
             popup_screen.enter(self);
@@ -544,51 +545,27 @@ impl<'frame> App for State<'frame> {
     }
 }
 
+#[enum_dispatch]
 #[derive(Eq, PartialEq, Copy, Clone)]
-pub enum Screen {
-    Game,
-    Retry,
-    Pause,
+enum Screen {
+    GameScreen,
+    RetryScreen,
+    PauseScreen,
 }
 
-impl Screen {
-    pub fn enter(&self, state: &mut State) {
-        match self {
-            Screen::Game => GameScreen::enter(state),
-            Screen::Retry => RetryScreen::enter(state),
-            Screen::Pause => PauseScreen::enter(state),
-        }
-    }
-
-    pub fn handle_input(&self, state: &mut State, input: &Input) {
-        match self {
-            Screen::Game => GameScreen::handle_input(state, input),
-            Screen::Retry => RetryScreen::handle_input(state, input),
-            Screen::Pause => PauseScreen::handle_input(state, input),
-        }
-    }
-
-    pub fn tick(&self, state: &mut State) {
-        match self {
-            Screen::Game => GameScreen::tick(state),
-            Screen::Retry => RetryScreen::tick(state),
-            Screen::Pause => PauseScreen::tick(state),
-        }
-    }
-
-    pub fn draw(&self, state: &State, buf: &mut ScreenBuffer) {
-        match self {
-            Screen::Game => GameScreen::draw(state, buf),
-            Screen::Retry => RetryScreen::draw(state, buf),
-            Screen::Pause => PauseScreen::draw(state, buf),
-        }
-    }
+#[enum_dispatch(Screen)]
+trait ScreenBehavior {
+    fn enter(&self, state: &mut State);
+    fn handle_input(&self, state: &mut State, input: &Input);
+    fn tick(&self, state: &mut State);
+    fn draw(&self, state: &State, buf: &mut ScreenBuffer);
 }
 
+#[derive(Eq, PartialEq, Copy, Clone)]
 struct GameScreen;
 
-impl GameScreen {
-    pub fn enter(state: &mut State) {
+impl ScreenBehavior for GameScreen {
+    fn enter(&self, state: &mut State) {
         state.fall_timer.start();
         state.curr_tet_index = state.rng.usize(0..7);
         state.next_tet_index = state.rng.usize(0..7);
@@ -597,7 +574,7 @@ impl GameScreen {
         state.tet_pos = State::spawn_pos();
     }
 
-    pub fn handle_input(state: &mut State, input: &Input) {
+    fn handle_input(&self, state: &mut State, input: &Input) {
         if input.is_back_edge(Scancode::Left) {
             state.left_repeater.stop();
         }
@@ -641,11 +618,11 @@ impl GameScreen {
         } else if input.is_front_edge(Scancode::R) {
             state.clean_filled_lines();
         } else if input.is_front_edge(Scancode::Escape) {
-            state.open_popup_screen(Screen::Pause);
+            state.open_popup_screen(PauseScreen.into());
         }
     }
 
-    pub fn tick(state: &mut State) {
+    fn tick(&self, state: &mut State) {
         state.left_repeater.tick();
         state.right_repeater.tick();
         state.down_repeater.tick();
@@ -675,7 +652,7 @@ impl GameScreen {
         }
     }
 
-    pub fn draw(state: &State, buf: &mut ScreenBuffer) {
+    fn draw(&self, state: &State, buf: &mut ScreenBuffer) {
         crate::video::draw_rect(buf, state.field_pos, Field::width() + 2, Field::height() + 2, b"+");
 
         for y in 0..Field::height() {
@@ -712,49 +689,51 @@ impl GameScreen {
     }
 }
 
+#[derive(Eq, PartialEq, Copy, Clone)]
 struct RetryScreen;
 
-impl RetryScreen {
-    pub fn enter(_state: &mut State) {
+impl ScreenBehavior for RetryScreen {
+    fn enter(&self, _state: &mut State) {
 
     }
 
-    pub fn handle_input(state: &mut State, input: &Input) {
+    fn handle_input(&self, state: &mut State, input: &Input) {
         if input.is_front_edge(Scancode::Space) {
-            state.change_screen(Screen::Game);
+            state.change_screen(GameScreen.into());
         }
     }
 
-    pub fn tick(_state: &mut State) {
+    fn tick(&self, _state: &mut State) {
 
     }
 
-    pub fn draw(_state: &State, buf: &mut ScreenBuffer) {
+    fn draw(&self, _state: &State, buf: &mut ScreenBuffer) {
         buf.draw_chars(Point::new(0, 0), b"Game over.");
         buf.draw_chars(Point::new(0, 1), b"Press space to try again.");
     }
 }
 
+#[derive(Eq, PartialEq, Copy, Clone)]
 struct PauseScreen;
 
-impl PauseScreen {
-    pub fn enter(state: &mut State) {
+impl ScreenBehavior for PauseScreen {
+    fn enter(&self, state: &mut State) {
         state.left_repeater.stop();
         state.right_repeater.stop();
         state.down_repeater.stop();
     }
 
-    pub fn handle_input(state: &mut State, input: &Input) {
+    fn handle_input(&self, state: &mut State, input: &Input) {
         if input.is_front_edge(Scancode::Escape) {
             state.close_popup_screen();
         }
     }
 
-    pub fn tick(_state: &mut State) {
+    fn tick(&self, _state: &mut State) {
 
     }
 
-    pub fn draw(_state: &State, buf: &mut ScreenBuffer) {
+    fn draw(&self, _state: &State, buf: &mut ScreenBuffer) {
         buf.draw_chars(Point::new(0, 0), b"Pause.");
     }
 }
