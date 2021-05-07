@@ -23,7 +23,7 @@ impl ScreenBuffer {
         y * self.width + x
     }
 
-    pub fn char_at(&self, x: usize, y: usize) -> u8 {
+    pub fn byte_at(&self, x: usize, y: usize) -> u8 {
         self.chars[self.index(x, y)]
     }
 
@@ -31,7 +31,17 @@ impl ScreenBuffer {
         self.chars.fill(0);
     }
 
-    pub fn draw_chars(&mut self, p: Point, s: &[u8]) {
+    pub fn set_byte(&mut self, p: Point, b: u8) {
+        let Point { x, y } = p;
+        if y >= 0 && y < self.height as Number {
+            if x >= 0 && x < self.width as Number {
+                let index = self.index(x as usize, y as usize);
+                self.chars[index] = b;
+            }
+        }
+    }
+
+    pub fn set_bytes(&mut self, p: Point, s: &[u8]) {
         let Point { x, y } = p;
         if y >= 0 && y < self.height as Number {
             if x < self.width as Number && x + s.len() as Number >= 0 {
@@ -47,14 +57,19 @@ impl ScreenBuffer {
     }
 }
 
-pub fn draw_rect(buf: &mut ScreenBuffer, p: Point, width: Number, height: Number, char: &[u8]) {
+pub fn draw_str(buf: &mut ScreenBuffer, p: Point, str: &str) {
+    buf.set_bytes(p, str.as_bytes());
+}
+
+pub fn draw_rect(buf: &mut ScreenBuffer, p: Point, width: Number, height: Number, chr: char) {
+    let chr = [chr as u8];
     if width >= 2 && height >= 2 {
-        let horizontal_line = iter::repeat(char[0]).take(width as usize).collect::<Vec<_>>();
-        buf.draw_chars(p, &horizontal_line);
-        buf.draw_chars(p.add_y(height as Number - 1), &horizontal_line);
+        let horizontal_line = iter::repeat(chr[0]).take(width as usize).collect::<Vec<_>>();
+        buf.set_bytes(p, &horizontal_line);
+        buf.set_bytes(p.add_y(height as Number - 1), &horizontal_line);
         for j in p.y + 1..p.y + height as Number - 1 {
-            buf.draw_chars(p.with_y(j), char);
-            buf.draw_chars(p.with_y(j).add_x(width as Number - 1), char);
+            buf.set_bytes(p.with_y(j), &chr);
+            buf.set_bytes(p.with_y(j).add_x(width as Number - 1), &chr);
         }
     }
 }

@@ -7,7 +7,7 @@ use engine::base::{Number, App};
 use engine::geometry::Point;
 use engine::input::Input;
 use engine::time::{BlinkAnimation, DelayedRepeat, TimeAware, Timer};
-use engine::video::{ScreenBuffer, draw_rect};
+use engine::video::{ScreenBuffer, draw_rect, draw_str};
 use enum_dispatch::enum_dispatch;
 
 const FRAME_SIDE: usize = 4;
@@ -653,7 +653,7 @@ impl ScreenBehavior for GameScreen {
     }
 
     fn draw(&self, state: &State, buf: &mut ScreenBuffer) {
-        draw_rect(buf, state.field_pos, Field::width() + 2, Field::height() + 2, b"+");
+        draw_rect(buf, state.field_pos, Field::width() + 2, Field::height() + 2, '+');
 
         for y in 0..Field::height() {
             let pos_y = state.field_pos.y + y + 1;
@@ -661,7 +661,7 @@ impl ScreenBehavior for GameScreen {
                 for x in 0..Field::width() {
                     let pos_x = state.field_pos.x + x + 1;
                     if state.field.is_filled(Point::new(x, y)) {
-                        buf.draw_chars(Point::new(pos_x, pos_y), &[0xb1u8]);
+                        buf.set_byte(Point::new(pos_x, pos_y), 0xb1u8);
                     }
                 }
             }
@@ -672,7 +672,7 @@ impl ScreenBehavior for GameScreen {
                 for x in 0..Frame::width() {
                     let pos = state.tet_pos + state.field_pos + Point::new(1, 1) + Point::new(x, y);
                     if state.current_frame().is_filled(Point::new(x, y)) {
-                        buf.draw_chars(pos, &[0xb1u8]);
+                        buf.set_byte(pos, 0xb1u8);
                     }
                 }
             }
@@ -682,7 +682,7 @@ impl ScreenBehavior for GameScreen {
             for x in 0..Frame::width() {
                 let pos = state.field_pos.add_x(Field::width() + 4).add_y(Field::height() / 2) + Point::new(x, y);
                 if state.tetrominos[state.next_tet_index].frames[0].is_filled(Point::new(x, y)) {
-                    buf.draw_chars(pos, &[0xb1u8]);
+                    buf.set_byte(pos, 0xb1u8);
                 }
             }
         }
@@ -708,8 +708,8 @@ impl ScreenBehavior for RetryScreen {
     }
 
     fn draw(&self, _state: &State, buf: &mut ScreenBuffer) {
-        buf.draw_chars(Point::new(0, 0), b"Game over.");
-        buf.draw_chars(Point::new(0, 1), b"Press space to try again.");
+        draw_str(buf, Point::new(0, 0), "Game over.");
+        draw_str(buf, Point::new(0, 1), "Press space to try again.");
     }
 }
 
@@ -734,6 +734,6 @@ impl ScreenBehavior for PauseScreen {
     }
 
     fn draw(&self, _state: &State, buf: &mut ScreenBuffer) {
-        buf.draw_chars(Point::new(0, 0), b"Pause.");
+        draw_str(buf, Point::new(0, 0), "Pause.");
     }
 }

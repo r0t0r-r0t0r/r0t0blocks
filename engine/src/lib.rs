@@ -12,7 +12,7 @@ use sdl2::keyboard::Scancode;
 use sdl2::rect::Rect;
 
 use crate::input::Input;
-use crate::video::ScreenBuffer;
+use crate::video::{ScreenBuffer, draw_str};
 
 use crate::geometry::Point;
 use crate::base::App;
@@ -130,12 +130,12 @@ pub fn run(app: &mut impl App, tileset_path: &str) -> Result<(), String> {
 
                     app.draw(&mut screen_buffer);
 
-                    screen_buffer.draw_chars(Point::new(0, 0), fps.to_string().as_bytes());
+                    draw_str(&mut screen_buffer, Point::new(0, 0), &fps.to_string());
 
                     canvas.clear();
                     for y in 0..tile_count.1 {
                         for x in 0..tile_count.0 {
-                            let chr = screen_buffer.char_at(x as usize, y as usize);
+                            let chr = screen_buffer.byte_at(x as usize, y as usize);
 
                             tileset_src_rect.set_x(((chr as usize % 16) * tile_size.0 as usize) as i32);
                             tileset_src_rect.set_y(((chr as usize / 16) * tile_size.1 as usize) as i32);
