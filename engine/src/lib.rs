@@ -1,9 +1,8 @@
-mod blocks;
-mod base;
-mod geometry;
-mod input;
-mod time;
-mod video;
+pub mod base;
+pub mod input;
+pub mod geometry;
+pub mod time;
+pub mod video;
 
 use std::path::Path;
 use std::time::Instant;
@@ -12,17 +11,15 @@ use sdl2::event::Event;
 use sdl2::keyboard::Scancode;
 use sdl2::rect::Rect;
 
-use blocks::State;
-use input::Input;
-use video::ScreenBuffer;
+use crate::input::Input;
+use crate::video::ScreenBuffer;
 
-use crate::blocks::create_frames;
 use crate::geometry::Point;
 use crate::base::App;
 
 struct TimerEvent;
 
-pub fn run(app: &mut impl App) -> Result<(), String> {
+pub fn run(app: &mut impl App, tileset_path: &str) -> Result<(), String> {
     let scale = 1;
     let tile_count = (30, 30);
     let tile_size = (24, 24);
@@ -68,7 +65,7 @@ pub fn run(app: &mut impl App) -> Result<(), String> {
         }
     }));
 
-    let tileset_surface = sdl2::surface::Surface::load_bmp(Path::new("assets/tileset_24_24.bmp"))?;
+    let tileset_surface = sdl2::surface::Surface::load_bmp(Path::new(tileset_path))?;
     let tileset_texture = texture_creator
         .create_texture_from_surface(&tileset_surface)
         .map_err(|e| e.to_string())?;
@@ -167,11 +164,4 @@ pub fn run(app: &mut impl App) -> Result<(), String> {
     }
 
     Ok(())
-}
-
-fn main() -> Result<(), String> {
-    let frames = create_frames();
-    let mut state = State::new(&frames);
-
-    run(&mut state)
 }

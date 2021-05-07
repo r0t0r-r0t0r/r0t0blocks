@@ -1,11 +1,5 @@
-[package]
-name = "r0t0blocks"
-version = "0.1.0"
-authors = ["r0t0r-r0t0r"]
-edition = "2018"
-
-[dependencies]
-sdl2 = "0.34.5"
-fastrand = "1.4.1"
-enum_dispatch = "0.3.6"
-
+[workspace]
+members = [
+    'engine',
+    'blocks',
+]

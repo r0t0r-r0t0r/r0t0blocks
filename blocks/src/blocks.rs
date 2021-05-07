@@ -3,11 +3,11 @@ use std::convert::TryFrom;
 use fastrand::Rng;
 use sdl2::keyboard::Scancode;
 
-use crate::base::{Number, App};
-use crate::geometry::Point;
-use crate::input::Input;
-use crate::time::{BlinkAnimation, DelayedRepeat, TimeAware, Timer};
-use crate::video::ScreenBuffer;
+use engine::base::{Number, App};
+use engine::geometry::Point;
+use engine::input::Input;
+use engine::time::{BlinkAnimation, DelayedRepeat, TimeAware, Timer};
+use engine::video::{ScreenBuffer, draw_rect};
 use enum_dispatch::enum_dispatch;
 
 const FRAME_SIDE: usize = 4;
@@ -653,7 +653,7 @@ impl ScreenBehavior for GameScreen {
     }
 
     fn draw(&self, state: &State, buf: &mut ScreenBuffer) {
-        crate::video::draw_rect(buf, state.field_pos, Field::width() + 2, Field::height() + 2, b"+");
+        draw_rect(buf, state.field_pos, Field::width() + 2, Field::height() + 2, b"+");
 
         for y in 0..Field::height() {
             let pos_y = state.field_pos.y + y + 1;

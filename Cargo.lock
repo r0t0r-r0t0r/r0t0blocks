@@ -19,6 +19,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
+name = "engine"
+version = "0.1.0"
+dependencies = [
+ "sdl2",
+]
+
+[[package]]
 name = "enum_dispatch"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -88,6 +95,7 @@ dependencies = [
 name = "r0t0blocks"
 version = "0.1.0"
 dependencies = [
+ "engine",
  "enum_dispatch",
  "fastrand",
  "sdl2",
