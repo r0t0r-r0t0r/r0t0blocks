@@ -9,6 +9,7 @@ use engine::input::Input;
 use engine::time::{BlinkAnimation, DelayedRepeat, TimeAware, Timer};
 use engine::video::{ScreenBuffer, draw_rect, draw_str};
 use enum_dispatch::enum_dispatch;
+use std::cmp::min;
 
 const FRAME_SIDE: usize = 4;
 
@@ -261,7 +262,8 @@ impl Field {
         return false;
     }
 
-    pub fn clean_filled_lines(&mut self) {
+    pub fn clean_filled_lines(&mut self) -> Number {
+        let mut filled_lines: Number = 0;
         let mut read_line = FIELD_HEIGHT;
         let mut first_write_line = FIELD_HEIGHT - 1;
         let mut last_write_line = first_write_line + 1;
@@ -270,6 +272,7 @@ impl Field {
 
             if self.is_line_filled(read_line as Number) {
                 last_write_line -= 1;
+                filled_lines += 1;
             } else {
                 if first_write_line >= last_write_line {
                     for i in 0..FIELD_WIDTH {
@@ -289,14 +292,15 @@ impl Field {
                 break;
             }
         }
-        if first_write_line < last_write_line {
-            return;
-        }
-        for j in last_write_line..=first_write_line {
-            for i in 0..FIELD_WIDTH {
-                self.squares[index(i, j, FIELD_WIDTH)] = false;
+        if first_write_line >= last_write_line {
+            for j in last_write_line..=first_write_line {
+                for i in 0..FIELD_WIDTH {
+                    self.squares[index(i, j, FIELD_WIDTH)] = false;
+                }
             }
         }
+
+        filled_lines
     }
 
     pub fn copy_frame(&mut self, frame: &Frame, p: Point) {
@@ -368,6 +372,7 @@ pub struct State<'frame> {
     left_repeater: DelayedRepeat,
     right_repeater: DelayedRepeat,
     down_repeater: DelayedRepeat,
+    score: Number,
 
     // visualisation
     field_pos: Point,
@@ -413,6 +418,7 @@ impl<'frame> State<'frame> {
             left_repeater: DelayedRepeat::new(30, 5),
             right_repeater: DelayedRepeat::new(30, 5),
             down_repeater: DelayedRepeat::new(30, 3),
+            score: 0,
         };
 
         initial_screen.enter(&mut state);
@@ -444,8 +450,8 @@ impl<'frame> State<'frame> {
         self.field.is_collide(frame, p)
     }
 
-    fn clean_filled_lines(&mut self) {
-        self.field.clean_filled_lines();
+    fn clean_filled_lines(&mut self) -> Number {
+        self.field.clean_filled_lines()
     }
 
     fn move_colliding_tetromino(&mut self, new_pos: Point) {
@@ -525,6 +531,22 @@ impl<'frame> State<'frame> {
 
     pub fn close_popup_screen(&mut self) {
         self.popup_screen = None;
+    }
+
+    pub fn update_score(&mut self, lines: Number) {
+        let score = if lines <= 0 {
+            0
+        } else if lines == 1 {
+            100
+        } else if lines == 2 {
+            250
+        } else if lines == 3 {
+            500
+        } else {
+            1000
+        };
+
+        self.score = min(self.score + score, 9999999);
     }
 }
 
@@ -615,8 +637,6 @@ impl ScreenBehavior for GameScreen {
                     break;
                 }
             }
-        } else if input.is_front_edge(Scancode::R) {
-            state.clean_filled_lines();
         } else if input.is_front_edge(Scancode::Escape) {
             state.open_popup_screen(PauseScreen.into());
         }
@@ -642,7 +662,8 @@ impl ScreenBehavior for GameScreen {
             state.move_colliding_tetromino(new_pos);
         }
         if state.filled_lines_animation.is_triggered() {
-            state.clean_filled_lines();
+            let filled_lines = state.clean_filled_lines();
+            state.update_score(filled_lines);
             state.fall_timer.start();
             state.finish_turn();
         }
@@ -686,6 +707,8 @@ impl ScreenBehavior for GameScreen {
                 }
             }
         }
+
+        draw_str(buf, state.field_pos.add_x(3 + Field::width()).add_y(1), &state.score.to_string());
     }
 }
 
