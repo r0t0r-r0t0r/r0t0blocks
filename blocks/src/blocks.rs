@@ -208,8 +208,6 @@ impl Frame {
 
 const FIELD_WIDTH: usize = 10;
 const FIELD_HEIGHT: usize = 18;
-// const FIELD_WIDTH: usize = 4;
-// const FIELD_HEIGHT: usize = 3;
 
 pub struct Field {
     squares: [bool; FIELD_WIDTH * FIELD_HEIGHT],
@@ -307,8 +305,12 @@ impl Field {
         for j in 0..(FRAME_SIDE as Number) {
             for i in 0..(FRAME_SIDE as Number) {
                 if frame.is_filled(Point::new(i, j)) {
-                    //TODO: do not panic
-                    self.squares[index((i + p.x) as usize, (j + p.y) as usize, FIELD_WIDTH)] = true;
+                    let x = i + p.x;
+                    let y = j + p.y;
+
+                    if x >= 0 && x < Self::width() && y >= 0 && y < Self::height() {
+                        self.squares[index(x as usize, y as usize, FIELD_WIDTH)] = true;
+                    }
                 }
             }
         }
@@ -424,16 +426,6 @@ impl<'frame> State<'frame> {
         initial_screen.enter(&mut state);
 
         state
-    }
-
-    fn next_tetromino(&mut self) {
-        self.curr_tet_index = (self.curr_tet_index + 1) % self.tetrominos.len();
-        self.curr_frame = 0;
-    }
-
-    fn prev_tetromino(&mut self) {
-        self.curr_tet_index = (self.tetrominos.len() + self.curr_tet_index - 1) % self.tetrominos.len();
-        self.curr_frame = 0;
     }
 
     fn current_frame(&self) -> &'frame Frame {
@@ -594,6 +586,7 @@ impl ScreenBehavior for GameScreen {
         state.curr_frame = 0;
         state.field.clear();
         state.tet_pos = State::spawn_pos();
+        state.score = 0;
     }
 
     fn handle_input(&self, state: &mut State, input: &Input) {
@@ -607,13 +600,7 @@ impl ScreenBehavior for GameScreen {
             state.down_repeater.stop();
         }
 
-        if input.is_front_edge(Scancode::Equals) {
-            state.next_tetromino();
-        } else if input.is_front_edge(Scancode::Minus) {
-            state.prev_tetromino();
-        } else if input.is_front_edge(Scancode::Space) {
-            state.rotate_colliding_tetromino();
-        } else if input.is_front_edge(Scancode::Up) {
+        if input.is_front_edge(Scancode::Up) {
             state.rotate_colliding_tetromino();
         } else if input.is_front_edge(Scancode::Down) {
             let new_pos = state.tet_pos.add_y(1);
@@ -629,14 +616,6 @@ impl ScreenBehavior for GameScreen {
             state.move_colliding_tetromino(new_pos);
             state.right_repeater.start();
             state.left_repeater.stop();
-        } else if input.is_front_edge(Scancode::V) {
-            state.copy_frame();
-            for y in 0..Field::height() {
-                if state.field.is_line_filled(y) {
-                    state.filled_lines_animation.start();
-                    break;
-                }
-            }
         } else if input.is_front_edge(Scancode::Escape) {
             state.open_popup_screen(PauseScreen.into());
         }
