@@ -382,7 +382,7 @@ pub struct State<'frame> {
 
 impl<'frame> State<'frame> {
     fn spawn_pos() -> Point {
-        Point::new((Field::width() - Frame::width()) / 2, -1)
+        Point::new((Field::width() - Frame::width()) / 2, -2)
     }
 
     pub fn new(frames: &'frame [Vec<Frame>; 7]) -> State {
@@ -398,7 +398,9 @@ impl<'frame> State<'frame> {
 
         let field_pos = Point::new(3, 3);
 
-        let fall_timer = Timer::new(120);
+        let score = 0;
+        let level = Self::level(score);
+        let fall_timer = Timer::new(Self::fall_period(level));
 
         let rng = Rng::new();
 
@@ -420,7 +422,7 @@ impl<'frame> State<'frame> {
             left_repeater: DelayedRepeat::new(30, 5),
             right_repeater: DelayedRepeat::new(30, 5),
             down_repeater: DelayedRepeat::new(30, 3),
-            score: 0,
+            score,
         };
 
         initial_screen.enter(&mut state);
@@ -540,6 +542,34 @@ impl<'frame> State<'frame> {
 
         self.score = min(self.score + score, 9999999);
     }
+
+    fn fall_period(level: Number) -> Number {
+        match level {
+            x if x <= 0 => 120,
+            1 => 60,
+            2 => 50,
+            3 => 40,
+            4 => 34,
+            5 => 28,
+            6 => 24,
+            7 => 16,
+            8 => 10,
+            _ => 8,
+        }
+    }
+
+    fn level(score: Number) -> Number {
+        if score < 0 {
+            0
+        } else {
+            min(9, score / 5000)
+        }
+    }
+
+    pub fn actualize_level(&mut self) {
+        let level = Self::level(self.score);
+        self.fall_timer = Timer::new(Self::fall_period(level));
+    }
 }
 
 impl<'frame> App for State<'frame> {
@@ -580,13 +610,14 @@ struct GameScreen;
 
 impl ScreenBehavior for GameScreen {
     fn enter(&self, state: &mut State) {
+        state.score = 0;
+        state.fall_timer = Timer::new(State::fall_period(State::level(state.score)));
         state.fall_timer.start();
         state.curr_tet_index = state.rng.usize(0..7);
         state.next_tet_index = state.rng.usize(0..7);
         state.curr_frame = 0;
         state.field.clear();
         state.tet_pos = State::spawn_pos();
-        state.score = 0;
     }
 
     fn handle_input(&self, state: &mut State, input: &Input) {
@@ -618,6 +649,10 @@ impl ScreenBehavior for GameScreen {
             state.left_repeater.stop();
         } else if input.is_front_edge(Scancode::Escape) {
             state.open_popup_screen(PauseScreen.into());
+        } else if input.is_front_edge(Scancode::Equals) {
+            state.score += 5000;
+            state.fall_timer = Timer::new(State::fall_period(State::level(state.score)));
+            state.fall_timer.start();
         }
     }
 
@@ -643,6 +678,7 @@ impl ScreenBehavior for GameScreen {
         if state.filled_lines_animation.is_triggered() {
             let filled_lines = state.clean_filled_lines();
             state.update_score(filled_lines);
+            state.actualize_level();
             state.fall_timer.start();
             state.finish_turn();
         }
@@ -688,6 +724,7 @@ impl ScreenBehavior for GameScreen {
         }
 
         draw_str(buf, state.field_pos.add_x(3 + Field::width()).add_y(1), &state.score.to_string());
+        draw_str(buf, state.field_pos.add_x(3 + Field::width()).add_y(2), &(State::level(state.score) + 1).to_string());
     }
 }
 
@@ -709,9 +746,10 @@ impl ScreenBehavior for RetryScreen {
 
     }
 
-    fn draw(&self, _state: &State, buf: &mut ScreenBuffer) {
+    fn draw(&self, state: &State, buf: &mut ScreenBuffer) {
         draw_str(buf, Point::new(0, 0), "Game over.");
-        draw_str(buf, Point::new(0, 1), "Press space to try again.");
+        draw_str(buf, Point::new(0, 1), &format!("Score: {}.", state.score));
+        draw_str(buf, Point::new(0, 2), "Press space to try again.");
     }
 }
 
