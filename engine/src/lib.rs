@@ -1,21 +1,26 @@
+use std::path::Path;
+use std::time::Instant;
+
+use sdl2::audio::AudioSpecDesired;
+use sdl2::event::Event;
+use sdl2::keyboard::Scancode;
+use sdl2::rect::Rect;
+
+use audio::Audio;
+
+use crate::base::App;
+use crate::geometry::Point;
+use crate::input::Input;
+use crate::video::{draw_str, ScreenBuffer};
+use std::sync::mpsc;
+use crate::audio::Sound;
+
 pub mod base;
 pub mod input;
 pub mod geometry;
 pub mod time;
 pub mod video;
-
-use std::path::Path;
-use std::time::Instant;
-
-use sdl2::event::Event;
-use sdl2::keyboard::Scancode;
-use sdl2::rect::Rect;
-
-use crate::input::Input;
-use crate::video::{ScreenBuffer, draw_str};
-
-use crate::geometry::Point;
-use crate::base::App;
+pub mod audio;
 
 struct TimerEvent;
 
@@ -64,6 +69,23 @@ pub fn run(app: &mut impl App, tileset_path: &str) -> Result<(), String> {
             0
         }
     }));
+
+    let audio_subsystem = sdl_context.audio()?;
+
+    let desired_spec = AudioSpecDesired {
+        freq: Some(44100),
+        channels: Some(1),  // mono
+        samples: None       // default sample size
+    };
+
+    let (audio_tr, audio_rx)= mpsc::channel::<Sound>();
+    let device = audio_subsystem.open_playback(None, &desired_spec, move|spec| {
+        // initialize the audio callback
+        Audio::new(spec.freq, audio_rx)
+    })?;
+
+    device.resume();
+    app.init_audio(audio_tr);
 
     let tileset_surface = sdl2::surface::Surface::load_bmp(Path::new(tileset_path))?;
     let tileset_texture = texture_creator
