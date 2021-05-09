@@ -13,7 +13,7 @@ impl Audio {
         Audio {
             phase_inc: 440.0 / freq as f32,
             phase: 0.0,
-            volume: 0.25,
+            volume: 0.025,
             rx,
         }
     }
