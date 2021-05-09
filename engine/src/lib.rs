@@ -23,19 +23,38 @@ pub mod audio;
 
 struct TimerEvent;
 
-pub fn run(app: &mut impl App, tileset_path: &str) -> Result<(), String> {
-    let scale = 1;
-    let tile_count = (30, 30);
-    let tile_size = (24, 24);
+pub struct RunParams<'str> {
+    pub tileset_path: &'str str,
+    pub app_name: &'str str,
+    pub scale: u32,
+    pub width_in_tiles: u32,
+    pub height_in_tiles: u32,
+}
+
+pub fn run(app: &mut impl App, params: RunParams) -> Result<(), String> {
+    let scale = params.scale;
+    let tile_count = (params.width_in_tiles, params.height_in_tiles);
 
     sdl2::hint::set("SDL_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR", "0");
 
     let sdl_context = sdl2::init()?;
+
+    let tileset_surface = sdl2::surface::Surface::load_bmp(Path::new(params.tileset_path))?;
+
+    if tileset_surface.width() % 16 != 0 {
+        return Err("Tileset width must be multiple of 16".into());
+    }
+    if tileset_surface.height() % 16 != 0 {
+        return Err("Tileset height must be multiple of 16".into());
+    }
+
+    let tile_size = (tileset_surface.width() / 16, tileset_surface.height() / 16);
+
     let video_subsystem = sdl_context.video()?;
 
     let window = video_subsystem
         .window(
-            "r0t0blocks",
+            params.app_name,
             scale * tile_count.0 * tile_size.0,
             scale * tile_count.1 * tile_size.1,
         )
@@ -86,12 +105,11 @@ pub fn run(app: &mut impl App, tileset_path: &str) -> Result<(), String> {
     device.resume();
     app.init_audio(audio_tr);
 
-    let tileset_surface = sdl2::surface::Surface::load_bmp(Path::new(tileset_path))?;
     let tileset_texture = texture_creator
         .create_texture_from_surface(&tileset_surface)
         .map_err(|e| e.to_string())?;
 
-    let mut tileset_src_rect = Rect::new(16, 0, tile_size.0, tile_size.1);
+    let mut tileset_src_rect = Rect::new(0, 0, tile_size.0, tile_size.1);
     let mut tileset_dst_rect = Rect::new(0, 0, tile_size.0 * scale, tile_size.1 * scale);
 
     let mut screen_buffer: ScreenBuffer = ScreenBuffer::new(tile_count.0 as usize, tile_count.1 as usize);
