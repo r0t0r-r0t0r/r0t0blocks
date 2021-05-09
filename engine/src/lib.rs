@@ -1,18 +1,14 @@
 use std::path::Path;
 use std::time::Instant;
 
-use sdl2::audio::AudioSpecDesired;
+use sdl2::audio::{AudioSpecDesired, AudioCallback, AudioSpec};
 use sdl2::event::Event;
 use sdl2::rect::Rect;
-
-use audio::Audio;
 
 use crate::base::App;
 use crate::geometry::Point;
 use crate::input::Input;
 use crate::video::{draw_str, ScreenBuffer};
-use std::sync::mpsc;
-use crate::audio::Sound;
 
 pub mod base;
 pub mod input;
@@ -31,7 +27,12 @@ pub struct RunParams<'str> {
     pub height_in_tiles: u32,
 }
 
-pub fn run(app: &mut impl App, params: RunParams) -> Result<(), String> {
+pub fn run<A, F, C>(app: &mut A, params: RunParams, audio: F) -> Result<(), String>
+    where
+        A: App,
+        C: AudioCallback,
+        F: FnOnce(AudioSpec) -> C,
+{
     let scale = params.scale;
     let tile_count = (params.width_in_tiles, params.height_in_tiles);
 
@@ -96,14 +97,11 @@ pub fn run(app: &mut impl App, params: RunParams) -> Result<(), String> {
         samples: None       // default sample size
     };
 
-    let (audio_tr, audio_rx)= mpsc::channel::<Sound>();
     let device = audio_subsystem.open_playback(None, &desired_spec, move|spec| {
-        // initialize the audio callback
-        Audio::new(spec.freq, audio_rx)
+        audio(spec)
     })?;
 
     device.resume();
-    app.init_audio(audio_tr);
 
     let tileset_texture = texture_creator
         .create_texture_from_surface(&tileset_surface)

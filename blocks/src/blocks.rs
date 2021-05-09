@@ -1,10 +1,8 @@
 use std::cmp::min;
-use std::sync::mpsc::Sender;
 
 use enum_dispatch::enum_dispatch;
 use fastrand::Rng;
 
-use engine::audio::Sound;
 use engine::base::{App, Number};
 use engine::geometry::Point;
 use engine::input::{Input, Key};
@@ -36,8 +34,6 @@ pub struct State<'frame> {
 
     // visualisation
     field_pos: Point,
-    // audio
-    audio: Option<Sender<Sound>>,
 }
 
 impl<'frame> State<'frame> {
@@ -83,7 +79,6 @@ impl<'frame> State<'frame> {
             right_repeater: DelayedRepeat::new(30, 5),
             down_repeater: DelayedRepeat::new(30, 3),
             score,
-            audio: None,
         };
 
         initial_screen.enter(&mut state);
@@ -231,19 +226,9 @@ impl<'frame> State<'frame> {
         let level = Self::level(self.score);
         self.fall_timer = Timer::new(Self::fall_period(level));
     }
-
-    fn make_beep(&self) {
-        if let Some(audio) = self.audio.as_ref() {
-            audio.send(Sound::Beep);
-        }
-    }
 }
 
 impl<'frame> App for State<'frame> {
-    fn init_audio(&mut self, tx: Sender<Sound>) {
-        self.audio = Some(tx);
-    }
-
     fn handle_input(&mut self, input: &Input) {
         let current_screen = self.popup_screen.unwrap_or(self.screen);
         current_screen.handle_input(self, input);
@@ -304,24 +289,20 @@ impl ScreenBehavior for GameScreen {
 
         if input.is_front_edge(Key::Up) {
             state.rotate_colliding_tetromino();
-            state.make_beep();
         } else if input.is_front_edge(Key::Down) {
             let new_pos = state.tet_pos.add_y(1);
             state.move_colliding_tetromino(new_pos);
             state.down_repeater.start();
-            state.make_beep();
         } else if input.is_front_edge(Key::Left) {
             let new_pos = state.tet_pos.sub_x(1);
             state.move_colliding_tetromino(new_pos);
             state.left_repeater.start();
             state.right_repeater.stop();
-            state.make_beep();
         } else if input.is_front_edge(Key::Right) {
             let new_pos = state.tet_pos.add_x(1);
             state.move_colliding_tetromino(new_pos);
             state.right_repeater.start();
             state.left_repeater.stop();
-            state.make_beep();
         } else if input.is_front_edge(Key::Escape) {
             state.open_popup_screen(PauseScreen.into());
         } else if input.is_front_edge(Key::Equals) {

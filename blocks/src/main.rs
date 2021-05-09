@@ -1,6 +1,7 @@
 use engine::{run, RunParams};
 use r0t0blocks::blocks::State;
 use r0t0blocks::tetromino::create_frames;
+use engine::audio::Silence;
 
 fn main() -> Result<(), String> {
     let frames = create_frames();
@@ -14,5 +15,5 @@ fn main() -> Result<(), String> {
         height_in_tiles: 24,
     };
 
-    run(&mut state, params)
+    run(&mut state, params, |_| Silence)
 }

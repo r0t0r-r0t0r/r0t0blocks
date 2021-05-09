@@ -1,0 +1,11 @@
+[package]
+name = "synth"
+version = "0.1.0"
+authors = ["r0t0r-r0t0r"]
+edition = "2018"
+
+[dependencies]
+sdl2 = "0.34.5"
+
+engine = { version = "0.1.0", path = "../engine", package = "engine" }
+
