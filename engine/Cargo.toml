@@ -6,4 +6,6 @@ edition = "2018"
 
 [dependencies]
 sdl2 = "0.34.5"
+strum = "0.20.0"
+strum_macros = "0.20.1"
 

@@ -3,6 +3,9 @@ use std::collections::HashMap;
 use sdl2::event::Event;
 use sdl2::keyboard::Scancode;
 
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
+
 struct Latch {
     prev: bool,
     curr: bool,
@@ -33,14 +36,115 @@ impl Latch {
     }
 }
 
+#[derive(Eq, PartialEq, Copy, Clone, Debug, EnumIter)]
+pub enum Key {
+    Up,
+    Down,
+    Left,
+    Right,
+    Escape,
+    Return,
+    Space,
+    A,
+    B,
+    C,
+    D,
+    E,
+    F,
+    G,
+    H,
+    I,
+    J,
+    K,
+    L,
+    M,
+    N,
+    O,
+    P,
+    Q,
+    R,
+    S,
+    T,
+    U,
+    V,
+    W,
+    X,
+    Y,
+    Z,
+    Num1,
+    Num2,
+    Num3,
+    Num4,
+    Num5,
+    Num6,
+    Num7,
+    Num8,
+    Num9,
+    Num0,
+    Minus,
+    Equals,
+}
+
+impl From<Key> for Scancode {
+    fn from(key: Key) -> Self {
+        match key {
+            Key::Up => Scancode::Up,
+            Key::Down => Scancode::Down,
+            Key::Left => Scancode::Left,
+            Key::Right => Scancode::Right,
+            Key::Escape => Scancode::Escape,
+            Key::Return => Scancode::Return,
+            Key::Space => Scancode::Space,
+            Key::A => Scancode::A,
+            Key::B => Scancode::B,
+            Key::C => Scancode::C,
+            Key::D => Scancode::D,
+            Key::E => Scancode::E,
+            Key::F => Scancode::F,
+            Key::G => Scancode::G,
+            Key::H => Scancode::H,
+            Key::I => Scancode::I,
+            Key::J => Scancode::J,
+            Key::K => Scancode::K,
+            Key::L => Scancode::L,
+            Key::M => Scancode::M,
+            Key::N => Scancode::N,
+            Key::O => Scancode::O,
+            Key::P => Scancode::P,
+            Key::Q => Scancode::Q,
+            Key::R => Scancode::R,
+            Key::S => Scancode::S,
+            Key::T => Scancode::T,
+            Key::U => Scancode::U,
+            Key::V => Scancode::V,
+            Key::W => Scancode::W,
+            Key::X => Scancode::X,
+            Key::Y => Scancode::Y,
+            Key::Z => Scancode::Z,
+            Key::Num1 => Scancode::Num1,
+            Key::Num2 => Scancode::Num2,
+            Key::Num3 => Scancode::Num3,
+            Key::Num4 => Scancode::Num4,
+            Key::Num5 => Scancode::Num5,
+            Key::Num6 => Scancode::Num6,
+            Key::Num7 => Scancode::Num7,
+            Key::Num8 => Scancode::Num8,
+            Key::Num9 => Scancode::Num9,
+            Key::Num0 => Scancode::Num0,
+            Key::Minus => Scancode::Minus,
+            Key::Equals => Scancode::Equals,
+        }
+    }
+}
+
 pub struct Input {
     keys: HashMap<Scancode, Latch>,
 }
 
 impl Input {
-    pub fn new(keys: &[Scancode]) -> Input {
+    pub fn new() -> Input {
         Input {
-            keys: keys.iter().map(|&x| (x, Latch::new())).collect(),
+            keys: Key::iter().map(|x| (x.into(), Latch::new())).collect(),
         }
     }
 
@@ -72,7 +176,8 @@ impl Input {
         }
     }
 
-    pub fn is_front_edge(&self, scancode: Scancode) -> bool {
+    pub fn is_front_edge(&self, key: Key) -> bool {
+        let scancode = key.into();
         if let Some(latch) = self.keys.get(&scancode) {
             latch.is_front_edge()
         } else {
@@ -80,7 +185,8 @@ impl Input {
         }
     }
 
-    pub fn is_back_edge(&self, scancode: Scancode) -> bool {
+    pub fn is_back_edge(&self, key: Key) -> bool {
+        let scancode = key.into();
         if let Some(latch) = self.keys.get(&scancode) {
             latch.is_back_edge()
         } else {

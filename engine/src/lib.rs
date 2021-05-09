@@ -3,7 +3,6 @@ use std::time::Instant;
 
 use sdl2::audio::AudioSpecDesired;
 use sdl2::event::Event;
-use sdl2::keyboard::Scancode;
 use sdl2::rect::Rect;
 
 use audio::Audio;
@@ -97,20 +96,7 @@ pub fn run(app: &mut impl App, tileset_path: &str) -> Result<(), String> {
 
     let mut screen_buffer: ScreenBuffer = ScreenBuffer::new(tile_count.0 as usize, tile_count.1 as usize);
 
-    let mut input = Input::new(&[
-        Scancode::Escape,
-        Scancode::Return,
-        Scancode::Space,
-        Scancode::Minus,
-        Scancode::Equals,
-        Scancode::Up,
-        Scancode::Left,
-        Scancode::Down,
-        Scancode::Right,
-        Scancode::V,
-        Scancode::R,
-        Scancode::Escape,
-    ]);
+    let mut input = Input::new();
 
     let mut is_drawing_tick = false;
 

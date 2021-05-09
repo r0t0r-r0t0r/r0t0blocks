@@ -3,12 +3,11 @@ use std::sync::mpsc::Sender;
 
 use enum_dispatch::enum_dispatch;
 use fastrand::Rng;
-use sdl2::keyboard::Scancode;
 
 use engine::audio::Sound;
 use engine::base::{App, Number};
 use engine::geometry::Point;
-use engine::input::Input;
+use engine::input::{Input, Key};
 use engine::time::{BlinkAnimation, DelayedRepeat, TimeAware, Timer};
 use engine::video::{draw_rect, draw_str, ScreenBuffer};
 
@@ -293,39 +292,39 @@ impl ScreenBehavior for GameScreen {
     }
 
     fn handle_input(&self, state: &mut State, input: &Input) {
-        if input.is_back_edge(Scancode::Left) {
+        if input.is_back_edge(Key::Left) {
             state.left_repeater.stop();
         }
-        if input.is_back_edge(Scancode::Right) {
+        if input.is_back_edge(Key::Right) {
             state.right_repeater.stop();
         }
-        if input.is_back_edge(Scancode::Down) {
+        if input.is_back_edge(Key::Down) {
             state.down_repeater.stop();
         }
 
-        if input.is_front_edge(Scancode::Up) {
+        if input.is_front_edge(Key::Up) {
             state.rotate_colliding_tetromino();
             state.make_beep();
-        } else if input.is_front_edge(Scancode::Down) {
+        } else if input.is_front_edge(Key::Down) {
             let new_pos = state.tet_pos.add_y(1);
             state.move_colliding_tetromino(new_pos);
             state.down_repeater.start();
             state.make_beep();
-        } else if input.is_front_edge(Scancode::Left) {
+        } else if input.is_front_edge(Key::Left) {
             let new_pos = state.tet_pos.sub_x(1);
             state.move_colliding_tetromino(new_pos);
             state.left_repeater.start();
             state.right_repeater.stop();
             state.make_beep();
-        } else if input.is_front_edge(Scancode::Right) {
+        } else if input.is_front_edge(Key::Right) {
             let new_pos = state.tet_pos.add_x(1);
             state.move_colliding_tetromino(new_pos);
             state.right_repeater.start();
             state.left_repeater.stop();
             state.make_beep();
-        } else if input.is_front_edge(Scancode::Escape) {
+        } else if input.is_front_edge(Key::Escape) {
             state.open_popup_screen(PauseScreen.into());
-        } else if input.is_front_edge(Scancode::Equals) {
+        } else if input.is_front_edge(Key::Equals) {
             state.score += 5000;
             state.fall_timer = Timer::new(State::fall_period(State::level(state.score)));
             state.fall_timer.start();
@@ -413,7 +412,7 @@ impl ScreenBehavior for RetryScreen {
     }
 
     fn handle_input(&self, state: &mut State, input: &Input) {
-        if input.is_front_edge(Scancode::Space) {
+        if input.is_front_edge(Key::Space) {
             state.change_screen(GameScreen.into());
         }
     }
@@ -440,7 +439,7 @@ impl ScreenBehavior for PauseScreen {
     }
 
     fn handle_input(&self, state: &mut State, input: &Input) {
-        if input.is_front_edge(Scancode::Escape) {
+        if input.is_front_edge(Key::Escape) {
             state.close_popup_screen();
         }
     }
