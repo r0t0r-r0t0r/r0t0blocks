@@ -114,6 +114,7 @@ impl AudioCallback for Audio {
     }
 }
 
+#[derive(Copy, Clone)]
 pub enum Note {
     A,
     Asharp,
@@ -190,16 +191,53 @@ impl State {
         });
         self.last_sound_instant = Some(now);
     }
+
+    fn note_by_key(key: Key) -> Option<Note> {
+        match key {
+            Key::A => Some(Note::C),
+            Key::W => Some(Note::Csharp),
+            Key::S => Some(Note::D),
+            Key::E => Some(Note::Dsharp),
+            Key::D => Some(Note::E),
+            Key::F => Some(Note::F),
+            Key::T => Some(Note::Fsharp),
+            Key::G => Some(Note::G),
+            Key::Y => Some(Note::Gsharp),
+            Key::H => Some(Note::A),
+            Key::U => Some(Note::Asharp),
+            Key::J => Some(Note::B),
+            _ => None,
+        }
+    }
 }
 
 impl App for State {
     fn handle_input(&mut self, input: &Input) {
-        if input.is_front_edge(Key::Space) {
-            self.hold_key(Note::C);
-        }
+        static KEYS: [Key; 12] = [
+            Key::A,
+            Key::W,
+            Key::S,
+            Key::E,
+            Key::D,
+            Key::F,
+            Key::T,
+            Key::G,
+            Key::Y,
+            Key::H,
+            Key::U,
+            Key::J,
+        ];
 
-        if input.is_back_edge(Key::Space) {
-            self.release_key(Note::C);
+        for key in KEYS.iter().copied() {
+            if let Some(note) = Self::note_by_key(key) {
+                if input.is_front_edge(key) {
+                    self.hold_key(note);
+                }
+
+                if input.is_back_edge(key) {
+                    self.release_key(note);
+                }
+            }
         }
     }
 
