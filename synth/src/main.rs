@@ -106,18 +106,18 @@ impl AudioCallback for Audio {
             match msg {
                 SoundMessage::Key{tick: main_tick, is_pressed, elapsed_milliseconds} => {
                     let audio_tick_delta = max(0, elapsed_milliseconds) * self.audio_frequency / 1000;
-                    let audio_tick = max(0, previous_tick.unwrap_or((self.audio_tick as i64) - self.offset) + audio_tick_delta);
+                    let audio_tick = max(self.audio_tick as i64, previous_tick.unwrap_or((self.audio_tick as i64) - self.offset) + audio_tick_delta);
 
                     if (audio_tick as usize) >= (self.audio_tick as usize + out.len()) {
                         future_messages.push_back(SoundMessage::Key { tick: main_tick, is_pressed, elapsed_milliseconds });
                     } else {
                         if is_pressed {
-                            self.sine.start_at(audio_tick as u64, 440.0);
+                             self.sine.start_at(audio_tick as u64, 440.0);
                         } else {
                             self.sine.stop_at(audio_tick as u64);
                         }
 
-                        last_processed_tick = Some(audio_tick_delta);
+                        last_processed_tick = Some(audio_tick);
                     }
 
                     previous_tick = Some(audio_tick);
