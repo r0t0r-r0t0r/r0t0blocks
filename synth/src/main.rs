@@ -104,15 +104,19 @@ impl AudioCallback for Audio {
 
         let mut process_message = |msg| {
             match msg {
-                SoundMessage::Key{tick: main_tick, is_pressed, elapsed_milliseconds} => {
+                SoundMessage::Key{tick: main_tick, is_pressed, elapsed_milliseconds, note} => {
+                    if elapsed_milliseconds as f32 / 1000.0 <= 1.0 / self.audio_frequency as f32 * out.len() as f32 {
+                        println!("{}", elapsed_milliseconds as f32 / 1000.0);
+                    }
+                    let elapsed_milliseconds = 0;
                     let audio_tick_delta = max(0, elapsed_milliseconds) * self.audio_frequency / 1000;
                     let audio_tick = max(self.audio_tick as i64, previous_tick.unwrap_or((self.audio_tick as i64) - self.offset) + audio_tick_delta);
 
                     if (audio_tick as usize) >= (self.audio_tick as usize + out.len()) {
-                        future_messages.push_back(SoundMessage::Key { tick: main_tick, is_pressed, elapsed_milliseconds });
+                        future_messages.push_back(SoundMessage::Key { tick: main_tick, is_pressed, elapsed_milliseconds, note });
                     } else {
                         if is_pressed {
-                             self.sine.start_at(audio_tick as u64, 440.0);
+                             self.sine.start_at(audio_tick as u64, frequency(note));
                         } else {
                             self.sine.stop_at(audio_tick as u64);
                         }
@@ -131,11 +135,16 @@ impl AudioCallback for Audio {
                 process_message(message);
             }
         }
+        let mut counter = 0;
         if let Some(rx) = rx {
             for message in rx.try_iter() {
                 process_message(message);
+                counter += 1;
             }
             self.rx = Some(rx);
+        }
+        if counter > 1 {
+            println!("Events: {}", counter);
         }
 
         self.future_messages = Some(future_messages);
@@ -151,11 +160,44 @@ impl AudioCallback for Audio {
     }
 }
 
+pub enum Note {
+    A,
+    Asharp,
+    B,
+    C,
+    Csharp,
+    D,
+    Dsharp,
+    E,
+    F,
+    Fsharp,
+    G,
+    Gsharp,
+}
+
+fn frequency(note: Note) -> f32 {
+    match note {
+        Note::C => 261.63,
+        Note::Csharp => 277.18,
+        Note::D => 293.66,
+        Note::Dsharp => 311.13,
+        Note::E => 329.63,
+        Note::F => 349.23,
+        Note::Fsharp => 369.99,
+        Note::G => 392.00,
+        Note::Gsharp => 415.30,
+        Note::A => 440.00,
+        Note::Asharp => 466.16,
+        Note::B => 493.88,
+    }
+}
+
 pub enum SoundMessage {
     Key {
         tick: u64,
         is_pressed: bool,
         elapsed_milliseconds: i64,
+        note: Note,
     },
     Stat,
 }
@@ -177,24 +219,26 @@ impl State {
 }
 
 impl State {
-    fn hold_key(&mut self) {
+    fn hold_key(&mut self, note: Note) {
         let now = Instant::now();
         let elapsed_milliseconds = self.last_sound_instant.map_or(0, |x| (now - x).as_millis() as i64);
         self.tx.send(SoundMessage::Key {
             tick: self.tick,
             is_pressed: true,
             elapsed_milliseconds,
+            note,
         });
         self.last_sound_instant = Some(now);
     }
 
-    fn release_key(&mut self) {
+    fn release_key(&mut self, note: Note) {
         let now = Instant::now();
         let elapsed_milliseconds = self.last_sound_instant.map_or(0, |x| (now - x).as_millis() as i64);
         self.tx.send(SoundMessage::Key {
             tick: self.tick,
             is_pressed: false,
             elapsed_milliseconds,
+            note,
         });
         self.last_sound_instant = Some(now);
     }
@@ -203,19 +247,11 @@ impl State {
 impl App for State {
     fn handle_input(&mut self, input: &Input) {
         if input.is_front_edge(Key::Space) {
-            self.tx.send(SoundMessage::Key {
-                tick: self.tick,
-                is_pressed: true,
-                elapsed_milliseconds: 0,
-            });
+            self.hold_key(Note::C);
         }
 
         if input.is_back_edge(Key::Space) {
-            self.tx.send(SoundMessage::Key {
-                tick: self.tick,
-                is_pressed: false,
-                elapsed_milliseconds: 0,
-            });
+            self.release_key(Note::C);
         }
 
         if input.is_front_edge(Key::S) {
