@@ -3,14 +3,13 @@ use engine::base::App;
 use engine::input::{Input, Key};
 use engine::video::ScreenBuffer;
 use std::sync::mpsc;
-use sdl2::audio::{AudioCallback, AudioFormatNum};
+use sdl2::audio::AudioCallback;
 use std::f32::consts::PI;
 use std::time::Instant;
-use std::cmp::max;
-use std::collections::VecDeque;
+use std::cmp::min;
 
 pub trait Sound {
-    fn render(&self, tick: u64) -> f32;
+    fn render(&self, tick: i64) -> f32;
 }
 
 fn angular(frequency: f32) -> f32 {
@@ -19,8 +18,8 @@ fn angular(frequency: f32) -> f32 {
 
 pub struct Sine {
     sample_rate: f32,
-    start: Option<(u64, f32)>,
-    stop_tick: Option<u64>,
+    start: Option<(i64, f32)>,
+    stop_tick: Option<i64>,
 }
 
 impl Sine {
@@ -32,18 +31,18 @@ impl Sine {
         }
     }
 
-    pub fn start_at(&mut self, start_tick: u64, frequency: f32) {
+    pub fn start_at(&mut self, start_tick: i64, frequency: f32) {
         self.start = Some((start_tick, frequency));
         self.stop_tick = None;
     }
 
-    pub fn stop_at(&mut self, stop_tick: u64) {
+    pub fn stop_at(&mut self, stop_tick: i64) {
         self.stop_tick = Some(stop_tick);
     }
 }
 
 impl Sound for Sine {
-    fn render(&self, tick: u64) -> f32 {
+    fn render(&self, tick: i64) -> f32 {
         if let Some((start_tick, frequency)) = self.start {
             if tick >= start_tick {
                 if self.stop_tick.map_or(true, |x| tick < x) {
@@ -62,31 +61,21 @@ impl Sound for Sine {
 }
 
 pub struct Audio {
-    main_frequency: u64,
-    audio_frequency: i64,
-    start_main_tick: Option<u64>,
-    audio_tick: u64,
-    rx: Option<mpsc::Receiver<SoundMessage>>,
+    sample_rate: i64,
+    major_tick: i64,
+    rx: mpsc::Receiver<SoundMessage>,
 
     sine: Sine,
-
-    offset: i64,
-    future_messages: Option<VecDeque<SoundMessage>>,
 }
 
 impl Audio {
-    pub fn new(main_frequency: u64, audio_frequency: i64, rx: mpsc::Receiver<SoundMessage>) -> Audio {
+    pub fn new(sample_rate: i64, rx: mpsc::Receiver<SoundMessage>) -> Audio {
         Audio {
-            main_frequency,
-            audio_frequency,
-            audio_tick: 0,
-            start_main_tick: None,
-            rx: Some(rx),
+            sample_rate,
+            major_tick: 0,
+            rx,
 
-            sine: Sine::new(audio_frequency as f32),
-
-            offset: 0,
-            future_messages: Some(VecDeque::with_capacity(5)),
+            sine: Sine::new(sample_rate as f32),
         }
     }
 }
@@ -95,68 +84,33 @@ impl AudioCallback for Audio {
     type Channel = f32;
 
     fn callback(&mut self, out: &mut [f32]) {
-        let mut last_processed_tick = None;
         let mut previous_tick = None;
-        let mut future_messages = VecDeque::with_capacity(5);
+        let next_major_tick = self.major_tick + out.len() as i64;
 
-        let postponed_messages = self.future_messages.take();
-        let rx = self.rx.take();
-
-        let mut process_message = |msg| {
+        for msg in self.rx.try_iter() {
             match msg {
-                SoundMessage::Key{tick: main_tick, is_pressed, elapsed_milliseconds, note} => {
-                    if elapsed_milliseconds as f32 / 1000.0 <= 1.0 / self.audio_frequency as f32 * out.len() as f32 {
-                        println!("{}", elapsed_milliseconds as f32 / 1000.0);
-                    }
-                    let elapsed_milliseconds = 0;
-                    let audio_tick_delta = max(0, elapsed_milliseconds) * self.audio_frequency / 1000;
-                    let audio_tick = max(self.audio_tick as i64, previous_tick.unwrap_or((self.audio_tick as i64) - self.offset) + audio_tick_delta);
+                SoundMessage::Key{is_pressed, elapsed_milliseconds, note} => {
+                    let elapsed_ticks = elapsed_milliseconds * self.sample_rate / 1000;
+                    let audio_tick = min(next_major_tick - 1, previous_tick.map_or(self.major_tick, |x| x + elapsed_ticks));
 
-                    if (audio_tick as usize) >= (self.audio_tick as usize + out.len()) {
-                        future_messages.push_back(SoundMessage::Key { tick: main_tick, is_pressed, elapsed_milliseconds, note });
+                    if is_pressed {
+                        self.sine.start_at(audio_tick, frequency(note));
                     } else {
-                        if is_pressed {
-                             self.sine.start_at(audio_tick as u64, frequency(note));
-                        } else {
-                            self.sine.stop_at(audio_tick as u64);
-                        }
-
-                        last_processed_tick = Some(audio_tick);
+                        self.sine.stop_at(audio_tick);
                     }
 
                     previous_tick = Some(audio_tick);
                 },
-                SoundMessage::Stat => {}
-            }
-        };
-
-        if let Some(postponed_messages) = postponed_messages {
-            for message in postponed_messages.into_iter() {
-                process_message(message);
             }
         }
-        let mut counter = 0;
-        if let Some(rx) = rx {
-            for message in rx.try_iter() {
-                process_message(message);
-                counter += 1;
-            }
-            self.rx = Some(rx);
-        }
-        if counter > 1 {
-            println!("Events: {}", counter);
-        }
-
-        self.future_messages = Some(future_messages);
 
         for (i, y) in out.iter_mut().enumerate() {
-            let tick = self.audio_tick + i as u64;
+            let tick = self.major_tick + i as i64;
 
             *y = self.sine.render(tick);
         }
 
-        self.offset = last_processed_tick.map_or(0, |x| (out.len() as i64) - (x - self.audio_tick as i64));
-        self.audio_tick += out.len() as u64;
+        self.major_tick = next_major_tick;
     }
 }
 
@@ -194,17 +148,14 @@ fn frequency(note: Note) -> f32 {
 
 pub enum SoundMessage {
     Key {
-        tick: u64,
         is_pressed: bool,
         elapsed_milliseconds: i64,
         note: Note,
     },
-    Stat,
 }
 
 struct State {
     tx: mpsc::Sender<SoundMessage>,
-    tick: u64,
     last_sound_instant: Option<Instant>,
 }
 
@@ -212,7 +163,6 @@ impl State {
     fn new(tx: mpsc::Sender<SoundMessage>) -> State {
         State {
             tx,
-            tick: 0,
             last_sound_instant: None,
         }
     }
@@ -222,8 +172,7 @@ impl State {
     fn hold_key(&mut self, note: Note) {
         let now = Instant::now();
         let elapsed_milliseconds = self.last_sound_instant.map_or(0, |x| (now - x).as_millis() as i64);
-        self.tx.send(SoundMessage::Key {
-            tick: self.tick,
+        let _ = self.tx.send(SoundMessage::Key {
             is_pressed: true,
             elapsed_milliseconds,
             note,
@@ -234,8 +183,7 @@ impl State {
     fn release_key(&mut self, note: Note) {
         let now = Instant::now();
         let elapsed_milliseconds = self.last_sound_instant.map_or(0, |x| (now - x).as_millis() as i64);
-        self.tx.send(SoundMessage::Key {
-            tick: self.tick,
+        let _ = self.tx.send(SoundMessage::Key {
             is_pressed: false,
             elapsed_milliseconds,
             note,
@@ -253,17 +201,12 @@ impl App for State {
         if input.is_back_edge(Key::Space) {
             self.release_key(Note::C);
         }
-
-        if input.is_front_edge(Key::S) {
-            self.tx.send(SoundMessage::Stat);
-        }
     }
 
     fn tick(&mut self) {
-        self.tick += 1;
     }
 
-    fn draw(&self, buf: &mut ScreenBuffer) {
+    fn draw(&self, _buf: &mut ScreenBuffer) {
     }
 }
 
@@ -280,6 +223,5 @@ fn main() -> Result<(), String> {
         height_in_tiles: 30,
     };
 
-    // todo: eliminate main frequency hardcode
-    run(&mut state, params, move |s| Audio::new(123, s.freq as i64, rx))
+    run(&mut state, params, move |s| Audio::new(s.freq as i64, rx))
 }
