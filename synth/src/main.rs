@@ -16,10 +16,11 @@ fn angular(frequency: f32) -> f32 {
     2.0 * PI * frequency
 }
 
+#[derive(Clone)]
 pub struct Sine {
     sample_rate: f32,
     start: Option<(i64, f32)>,
-    stop_tick: Option<i64>,
+    line: Line,
 }
 
 impl Sine {
@@ -27,17 +28,17 @@ impl Sine {
         Sine {
             sample_rate,
             start: None,
-            stop_tick: None,
+            line: Line::new(0, 0, 0.0, 0.0),
         }
     }
 
     pub fn start_at(&mut self, start_tick: i64, frequency: f32) {
         self.start = Some((start_tick, frequency));
-        self.stop_tick = None;
+        self.line = Line::new(start_tick, start_tick + (self.sample_rate * 0.05) as i64, 0.0, 1.0);
     }
 
     pub fn stop_at(&mut self, stop_tick: i64) {
-        self.stop_tick = Some(stop_tick);
+        self.line = Line::new(stop_tick, stop_tick + (self.sample_rate * 0.05) as i64, 1.0, 0.0);
     }
 }
 
@@ -45,12 +46,12 @@ impl Sound for Sine {
     fn render(&self, tick: i64) -> f32 {
         if let Some((start_tick, frequency)) = self.start {
             if tick >= start_tick {
-                if self.stop_tick.map_or(true, |x| tick < x) {
-                    let time = (tick - start_tick) as f32 / self.sample_rate;
-                    (angular(frequency) * time).sin() * 0.25
-                } else {
-                    0.0
+                let time = (tick - start_tick) as f32 / self.sample_rate;
+                let mut value = 0.0;
+                for i in 0..4 {
+                    value += (angular(frequency * i as f32) * time).sin();
                 }
+                value * 0.1 * self.line.render(tick)
             } else {
                 0.0
             }
@@ -60,12 +61,55 @@ impl Sound for Sine {
     }
 }
 
+#[derive(Clone)]
+struct Line {
+    start_tick: i64,
+    stop_tick: i64,
+
+    start_value: f32,
+    stop_value: f32,
+}
+
+impl Line {
+    fn new(
+        start_tick: i64,
+        stop_tick: i64,
+        start_value: f32,
+        stop_value: f32,
+    ) -> Line {
+        Line {
+            start_tick,
+            stop_tick,
+            start_value,
+            stop_value,
+        }
+    }
+}
+
+impl Sound for Line {
+    fn render(&self, tick: i64) -> f32 {
+        if tick < self.start_tick {
+            self.start_value
+        } else if tick >= self.stop_tick {
+            self.stop_value
+        } else {
+            let width = self.stop_tick - self.start_tick;
+            let height = self.stop_value - self.start_value;
+
+            let progress = (tick - self.start_tick) as f32 / (width - 1) as f32;
+            let value = self.start_value + progress * height;
+
+            value
+        }
+    }
+}
+
 pub struct Audio {
     sample_rate: i64,
     major_tick: i64,
     rx: mpsc::Receiver<SoundMessage>,
 
-    sine: Sine,
+    oscillators: Vec<Sine>,
 }
 
 impl Audio {
@@ -75,7 +119,24 @@ impl Audio {
             major_tick: 0,
             rx,
 
-            sine: Sine::new(sample_rate as f32),
+            oscillators: vec![Sine::new(sample_rate as f32); 12],
+        }
+    }
+
+    fn index(note: Note) -> usize {
+        match note {
+            Note::C => 0,
+            Note::Csharp => 1,
+            Note::D => 2,
+            Note::Dsharp => 3,
+            Note::E => 4,
+            Note::F => 5,
+            Note::Fsharp => 6,
+            Note::G => 7,
+            Note::Gsharp => 8,
+            Note::A => 9,
+            Note::Asharp => 10,
+            Note::B => 11,
         }
     }
 }
@@ -94,9 +155,9 @@ impl AudioCallback for Audio {
                     let audio_tick = min(next_major_tick - 1, previous_tick.map_or(self.major_tick, |x| x + elapsed_ticks));
 
                     if is_pressed {
-                        self.sine.start_at(audio_tick, frequency(note));
+                        self.oscillators[Self::index(note)].start_at(audio_tick, frequency(note));
                     } else {
-                        self.sine.stop_at(audio_tick);
+                        self.oscillators[Self::index(note)].stop_at(audio_tick);
                     }
 
                     previous_tick = Some(audio_tick);
@@ -107,7 +168,10 @@ impl AudioCallback for Audio {
         for (i, y) in out.iter_mut().enumerate() {
             let tick = self.major_tick + i as i64;
 
-            *y = self.sine.render(tick);
+            *y = 0.0;
+            for osc in self.oscillators.iter() {
+                *y += osc.render(tick);
+            }
         }
 
         self.major_tick = next_major_tick;
