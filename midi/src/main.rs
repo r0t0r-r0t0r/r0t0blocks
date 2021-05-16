@@ -54,12 +54,9 @@ fn main() -> Result<(), MidiError> {
             MtrkEvent{event: Event::Meta(MetaEvent::CopyrightNotice(msg)), ..} => println!("Copyright: {}", msg),
             MtrkEvent{event: Event::Meta(MetaEvent::SequenceTrackName(msg)), ..} => println!("Name: {}", msg),
             MtrkEvent{event: Event::Meta(MetaEvent::EndOfTrack), ..} => break,
+            MtrkEvent{event: Event::Meta(MetaEvent::TimeSignature{numerator, denominator, clocks_per_metronome, thirty_seconds_per_quarter}), ..} => println!("Time Signature: {}/{}, metronome: {}, quarter: {}", numerator, denominator, clocks_per_metronome, thirty_seconds_per_quarter),
             _ => {},
         }
-
-        // if let MtrkEvent{event: Event::Meta(MetaEvent::EndOfTrack), ..} = mtrk_event {
-        //     break;
-        // }
     }
 
     Ok(())
@@ -115,6 +112,12 @@ enum MetaEvent {
     CopyrightNotice(String),
     SequenceTrackName(String),
     EndOfTrack,
+    TimeSignature {
+        numerator: u32,
+        denominator: u32,
+        clocks_per_metronome: u32,
+        thirty_seconds_per_quarter: u32,
+    }
 }
 
 fn read_variable_length_quantity(reader: &mut impl Read) -> Result<u32, MidiError> {
@@ -228,12 +231,30 @@ fn read_meta_event(reader: &mut impl Read) -> Result<MetaEvent, MidiError> {
         0x02 => read_text(reader).map(|x| MetaEvent::CopyrightNotice(x)),
         0x03 => read_text(reader).map(|x| MetaEvent::SequenceTrackName(x)),
         0x2f => {
-            if reader.read_u8()? == 0 {
+            if reader.read_u8()? == 0x00 {
                 Ok(MetaEvent::EndOfTrack)
             } else {
                 Err(MidiError::InvalidMetaEvent)
             }
         },
+        0x58 => {
+            if reader.read_u8()? == 0x04 {
+                let numerator = reader.read_u8()?;
+                let denominator = reader.read_u8()?;
+
+                let clocks_per_metronome = reader.read_u8()?;
+                let thirty_seconds_per_quarter = reader.read_u8()?;
+
+                Ok(MetaEvent::TimeSignature {
+                    numerator: numerator as u32,
+                    denominator: 1 << (denominator as u32),
+                    clocks_per_metronome: clocks_per_metronome as u32,
+                    thirty_seconds_per_quarter: thirty_seconds_per_quarter as u32,
+                })
+            } else {
+                Err(MidiError::InvalidMetaEvent)
+            }
+        }
         _ => Err(UnsupportedMetaEvent(code))
     }
 }
@@ -244,7 +265,6 @@ fn read_text(reader: &mut impl Read) -> Result<String, MidiError> {
     let mut buf = vec![0u8; length as usize];
     reader.read_exact(&mut buf)?;
 
-    // let str = String::from_utf8(buf)?;
     let str = String::from_utf8_lossy(&buf).into_owned();
 
     Ok(str)
