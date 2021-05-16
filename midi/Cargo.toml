@@ -1,0 +1,9 @@
+[package]
+name = "midi"
+version = "0.1.0"
+authors = ["r0t0r-r0t0r"]
+edition = "2018"
+
+[dependencies]
+byteorder = "1"
+
