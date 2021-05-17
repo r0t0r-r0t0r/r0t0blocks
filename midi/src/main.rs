@@ -5,6 +5,7 @@ use std::mem;
 use byteorder::{ReadBytesExt, BigEndian};
 use crate::MidiError::UnsupportedMetaEvent;
 use std::string::FromUtf8Error;
+use std::convert::TryFrom;
 
 #[derive(Debug)]
 enum MidiError {
@@ -55,6 +56,10 @@ fn main() -> Result<(), MidiError> {
             MtrkEvent{event: Event::Meta(MetaEvent::SequenceTrackName(msg)), ..} => println!("Name: {}", msg),
             MtrkEvent{event: Event::Meta(MetaEvent::EndOfTrack), ..} => break,
             MtrkEvent{event: Event::Meta(MetaEvent::TimeSignature{numerator, denominator, clocks_per_metronome, thirty_seconds_per_quarter}), ..} => println!("Time Signature: {}/{}, metronome: {}, quarter: {}", numerator, denominator, clocks_per_metronome, thirty_seconds_per_quarter),
+            MtrkEvent{event: Event::Meta(MetaEvent::KeySignature{key_signature, mode}), ..} => println!("Key: {:?}", match mode {
+                Mode::Major => Key::from(MajorKey::from_key_signature(key_signature)),
+                Mode::Minor => Key::from(MinorKey::from_key_signature(key_signature)),
+            }),
             _ => {},
         }
     }
@@ -117,8 +122,196 @@ enum MetaEvent {
         denominator: u32,
         clocks_per_metronome: u32,
         thirty_seconds_per_quarter: u32,
+    },
+    KeySignature {
+        key_signature: KeySignature,
+        mode: Mode,
     }
 }
+
+enum KeySignature {
+    Flat7,
+    Flat6,
+    Flat5,
+    Flat4,
+    Flat3,
+    Flat2,
+    Flat1,
+    None,
+    Sharp1,
+    Sharp2,
+    Sharp3,
+    Sharp4,
+    Sharp5,
+    Sharp6,
+    Sharp7,
+}
+
+impl TryFrom<i8> for KeySignature {
+    type Error = ();
+
+    fn try_from(value: i8) -> Result<Self, Self::Error> {
+        match value {
+            -7 => Ok(KeySignature::Flat7),
+            -6 => Ok(KeySignature::Flat6),
+            -5 => Ok(KeySignature::Flat5),
+            -4 => Ok(KeySignature::Flat4),
+            -3 => Ok(KeySignature::Flat3),
+            -2 => Ok(KeySignature::Flat2),
+            -1 => Ok(KeySignature::Flat1),
+            0 => Ok(KeySignature::None),
+            1 => Ok(KeySignature::Sharp1),
+            2 => Ok(KeySignature::Sharp2),
+            3 => Ok(KeySignature::Sharp3),
+            4 => Ok(KeySignature::Sharp4),
+            5 => Ok(KeySignature::Sharp5),
+            6 => Ok(KeySignature::Sharp6),
+            7 => Ok(KeySignature::Sharp7),
+            _ => Err(())
+        }
+    }
+}
+
+enum Mode {
+    Major,
+    Minor,
+}
+
+impl TryFrom<u8> for Mode {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Mode::Major),
+            1 => Ok(Mode::Minor),
+            _ => Err(())
+        }
+    }
+}
+
+#[derive(Debug)]
+enum MajorKey {
+    CFlat,
+    GFlat,
+    DFlat,
+    AFlat,
+    EFlat,
+    BFlat,
+    F,
+    C,
+    G,
+    D,
+    A,
+    E,
+    B,
+    FSharp,
+    CSharp,
+}
+
+impl MajorKey {
+    fn from_key_signature(key_signature: KeySignature) -> MajorKey {
+        match key_signature {
+            KeySignature::Flat7 => MajorKey::CFlat,
+            KeySignature::Flat6 => MajorKey::GFlat,
+            KeySignature::Flat5 => MajorKey::DFlat,
+            KeySignature::Flat4 => MajorKey::AFlat,
+            KeySignature::Flat3 => MajorKey::EFlat,
+            KeySignature::Flat2 => MajorKey::BFlat,
+            KeySignature::Flat1 => MajorKey::F,
+            KeySignature::None => MajorKey::C,
+            KeySignature::Sharp1 => MajorKey::G,
+            KeySignature::Sharp2 => MajorKey::D,
+            KeySignature::Sharp3 => MajorKey::A,
+            KeySignature::Sharp4 => MajorKey::E,
+            KeySignature::Sharp5 => MajorKey::B,
+            KeySignature::Sharp6 => MajorKey::FSharp,
+            KeySignature::Sharp7 => MajorKey::CSharp,
+        }
+    }
+}
+
+#[derive(Debug)]
+enum MinorKey {
+    AFlat,
+    EFlat,
+    BFlat,
+    F,
+    C,
+    G,
+    D,
+    A,
+    E,
+    B,
+    FSharp,
+    CSharp,
+    GSharp,
+    DSharp,
+    ASharp,
+}
+
+impl MinorKey {
+    fn from_key_signature(key_signature: KeySignature) -> MinorKey {
+        match key_signature {
+            KeySignature::Flat7 => MinorKey::AFlat,
+            KeySignature::Flat6 => MinorKey::EFlat,
+            KeySignature::Flat5 => MinorKey::BFlat,
+            KeySignature::Flat4 => MinorKey::F,
+            KeySignature::Flat3 => MinorKey::C,
+            KeySignature::Flat2 => MinorKey::G,
+            KeySignature::Flat1 => MinorKey::D,
+            KeySignature::None => MinorKey::A,
+            KeySignature::Sharp1 => MinorKey::E,
+            KeySignature::Sharp2 => MinorKey::B,
+            KeySignature::Sharp3 => MinorKey::FSharp,
+            KeySignature::Sharp4 => MinorKey::CSharp,
+            KeySignature::Sharp5 => MinorKey::GSharp,
+            KeySignature::Sharp6 => MinorKey::DSharp,
+            KeySignature::Sharp7 => MinorKey::ASharp,
+        }
+    }
+}
+
+#[derive(Debug)]
+enum Key {
+    Major(MajorKey),
+    Minor(MinorKey),
+}
+
+impl From<MajorKey> for Key {
+    fn from(key: MajorKey) -> Self {
+        Key::Major(key)
+    }
+}
+
+impl From<MinorKey> for Key {
+    fn from(key: MinorKey) -> Self {
+        Key::Minor(key)
+    }
+}
+
+// struct Scale(Tonic, Mode);
+//
+// impl Scale {
+//     fn from_key_signature(signs: CircleOfFifth, mode: Mode) -> Scale {
+//         match (signs, mode) {
+//             (CircleOfFifth::Flat7, Mode::Major) =>
+//             (CircleOfFifth::Flat6, Mode::Major) => {}
+//             (CircleOfFifth::Flat5, Mode::Major) => {}
+//             (CircleOfFifth::Flat4, Mode::Major) => {}
+//             (CircleOfFifth::Flat3, Mode::Major) => {}
+//             (CircleOfFifth::Flat2, Mode::Major) => {}
+//             (CircleOfFifth::Flat1, Mode::Major) => {}
+//             (CircleOfFifth::None, Mode::Major) => {}
+//             (CircleOfFifth::Sharp1, Mode::Major) => {}
+//             (CircleOfFifth::Sharp2, Mode::Major) => {}
+//             (CircleOfFifth::Sharp3, Mode::Major) => {}
+//             (CircleOfFifth::Sharp4, Mode::Major) => {}
+//             (CircleOfFifth::Sharp5, Mode::Major) => {}
+//             (CircleOfFifth::Sharp6, Mode::Major) => {}
+//             (CircleOfFifth::Sharp7, Mode::Major) => {}
+//         }
+//     }
+// }
 
 fn read_variable_length_quantity(reader: &mut impl Read) -> Result<u32, MidiError> {
     let mut quantity = 0;
@@ -254,7 +447,22 @@ fn read_meta_event(reader: &mut impl Read) -> Result<MetaEvent, MidiError> {
             } else {
                 Err(MidiError::InvalidMetaEvent)
             }
-        }
+        },
+        0x59 => {
+            if reader.read_u8()? == 0x02 {
+                let sf = reader.read_i8()?;
+                let sf = KeySignature::try_from(sf).map_err(|_| MidiError::InvalidMetaEvent)?;
+                let mi = reader.read_u8()?;
+                let mi = Mode::try_from(mi).map_err(|_| MidiError::InvalidMetaEvent)?;
+
+                Ok(MetaEvent::KeySignature {
+                    key_signature: sf,
+                    mode: mi,
+                })
+            } else {
+                Err(MidiError::InvalidMetaEvent)
+            }
+        },
         _ => Err(UnsupportedMetaEvent(code))
     }
 }
