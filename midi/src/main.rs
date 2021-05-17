@@ -56,10 +56,7 @@ fn main() -> Result<(), MidiError> {
             MtrkEvent{event: Event::Meta(MetaEvent::SequenceTrackName(msg)), ..} => println!("Name: {}", msg),
             MtrkEvent{event: Event::Meta(MetaEvent::EndOfTrack), ..} => break,
             MtrkEvent{event: Event::Meta(MetaEvent::TimeSignature{numerator, denominator, clocks_per_metronome, thirty_seconds_per_quarter}), ..} => println!("Time Signature: {}/{}, metronome: {}, quarter: {}", numerator, denominator, clocks_per_metronome, thirty_seconds_per_quarter),
-            MtrkEvent{event: Event::Meta(MetaEvent::KeySignature{key_signature, mode}), ..} => println!("Key: {:?}", match mode {
-                Mode::Major => Key::from(MajorKey::from_key_signature(key_signature)),
-                Mode::Minor => Key::from(MinorKey::from_key_signature(key_signature)),
-            }),
+            MtrkEvent{event: Event::Meta(MetaEvent::KeySignature{key_signature, mode}), ..} => println!("Key: {:?}", mode.key(key_signature)),
             _ => {},
         }
     }
@@ -175,6 +172,15 @@ impl TryFrom<i8> for KeySignature {
 enum Mode {
     Major,
     Minor,
+}
+
+impl Mode {
+    fn key(&self, key_signature: KeySignature) -> Key {
+        match self {
+            Mode::Major => Key::from(MajorKey::from_key_signature(key_signature)),
+            Mode::Minor => Key::from(MinorKey::from_key_signature(key_signature)),
+        }
+    }
 }
 
 impl TryFrom<u8> for Mode {
